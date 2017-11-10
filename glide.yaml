@@ -1,0 +1,4 @@
+package: github.com/mittwald/kubernetes-replicator
+import:
+- package: k8s.io/client-go
+  version: ^5.0.1
