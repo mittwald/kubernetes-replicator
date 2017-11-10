@@ -1,5 +1,7 @@
 # ConfigMap & Secret replication for Kubernetes
 
+[![Docker Repository on Quay](https://quay.io/repository/mittwald/kubernetes-replicator/status "Docker Repository on Quay")](https://quay.io/repository/mittwald/kubernetes-replicator)
+
 This repository contains a custom Kubernetes controller that can be used to make
 secrets and config maps available in multiple namespaces.
 
