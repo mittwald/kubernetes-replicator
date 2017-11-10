@@ -3,14 +3,15 @@ package main
 import "k8s.io/client-go/kubernetes"
 import (
 	"flag"
+	"log"
+	"time"
+
+	"github.com/mittwald/kubernetes-replicator/replicate"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"log"
-	"github.com/mittwald/kubernetes-replicator/replicate"
-	"time"
 )
 
-var f Flags
+var f flags
 
 func init() {
 	var err error
