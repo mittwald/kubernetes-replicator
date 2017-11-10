@@ -14,4 +14,3 @@ spec:
       containers:
         - name: replicator
           image: quay.io/mittwald/kubernetes-replicator:latest
-          command: ["/kubernetes-replicator"]
