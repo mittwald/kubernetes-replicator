@@ -1,38 +1,31 @@
-# Automatically generated secrets for Kubernetes
+# ConfigMap & Secret replication for Kubernetes
 
-This repository contains a custom Kubernetes controller that can automatically create
-random secret values. This may be used for auto-generating random credentials for
-applications run on Kubernetes.
+This repository contains a custom Kubernetes controller that can be used to make
+secrets and config maps available in multiple namespaces.
 
 ## Deployment
 
 ```shellsession
 $ # Create roles and service accounts
-$ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-secret-generator/master/deploy/secret-generator-rbac.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replicator/master/deploy/rbac.yaml
 $ # Create actual deployment
-$ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-secret-generator/master/deploy/secret-generator.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replicator/master/deploy/deployment.yaml
 ```
 
 ## Usage
 
-Add the annotation `secret-generator.v1.mittwald.de/autogenerate` to any Kubernetes
-secret object. The value of the annotation can be a field name within the secret; the
-SecretGeneratorController will pick up this annotation and add a field (`password` in
-the example below) to the secret with a randomly generated string value.
+Add the annotation `replicator.v1.mittwald.de/replicate-from` to any Kubernetes
+secret or config map object. The value of that annotation should contain the
+the name of another secret or config map (using `<namespace>/<name>` notation).
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
   annotations:
-    secret-generator.v1.mittwald.de/autogenerate: password
-data:
-  username: c29tZXVzZXI=
+    replicator.v1.mittwald.de/replicate-from: default/some-secret
+data: {}
 ```
 
-## Operational tasks
-
--   Regenerate all automatically generated passwords:
-
-    ```
-    $ kubectl annotate secrets --all secret-generator.v1.mittwald.de/regenerate=true
+The replicator will then copy the `data` attribute of the referenced object into
+the annotated object and keep them in sync.   
