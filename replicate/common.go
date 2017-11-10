@@ -12,3 +12,9 @@ type replicatorProps struct {
 
 	dependencyMap map[string][]string
 }
+
+// Replicator describes the common interface that the secret and configmap
+// replicators shoud adhere to
+type Replicator interface {
+	Run()
+}

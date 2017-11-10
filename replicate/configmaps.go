@@ -3,6 +3,10 @@ package replicate
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,17 +15,15 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"log"
-	"strings"
-	"time"
 )
 
-type ConfigMapReplicator struct {
+type configMapReplicator struct {
 	replicatorProps
 }
 
-func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration) *ConfigMapReplicator {
-	repl := ConfigMapReplicator{
+// NewConfigMapReplicator creates a new config map replicator
+func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration) Replicator {
+	repl := configMapReplicator{
 		replicatorProps: replicatorProps{
 			client:        client,
 			dependencyMap: make(map[string][]string),
@@ -52,12 +54,12 @@ func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Durat
 	return &repl
 }
 
-func (r *ConfigMapReplicator) Run() {
+func (r *configMapReplicator) Run() {
 	log.Printf("running config map controller")
 	r.controller.Run(wait.NeverStop)
 }
 
-func (r *ConfigMapReplicator) ConfigMapAdded(obj interface{}) {
+func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 	configMap := obj.(*v1.ConfigMap)
 	configMapKey := fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name)
 
@@ -99,7 +101,7 @@ func (r *ConfigMapReplicator) ConfigMapAdded(obj interface{}) {
 	r.replicateConfigMap(configMap, sourceConfigMap)
 }
 
-func (r *ConfigMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
+func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
 	targetVersion, ok := configMap.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceConfigMap.ResourceVersion
 
@@ -132,7 +134,7 @@ func (r *ConfigMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 	return nil
 }
 
-func (r *ConfigMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, error) {
+func (r *configMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, error) {
 	obj, exists, err := r.store.GetByKey(key)
 	if err != nil {
 		return nil, fmt.Errorf("could not get config map %s: %s", key, err)
@@ -150,7 +152,7 @@ func (r *ConfigMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, err
 	return configMap, nil
 }
 
-func (r *ConfigMapReplicator) updateDependents(configMap *v1.ConfigMap, dependents []string) error {
+func (r *configMapReplicator) updateDependents(configMap *v1.ConfigMap, dependents []string) error {
 	for _, dependentKey := range dependents {
 		log.Printf("updating dependent config map %s/%s -> %s", configMap.Namespace, configMap.Name, dependentKey)
 
@@ -171,7 +173,7 @@ func (r *ConfigMapReplicator) updateDependents(configMap *v1.ConfigMap, dependen
 	return nil
 }
 
-func (r *ConfigMapReplicator) ConfigMapDeleted(obj interface{}) {
+func (r *configMapReplicator) ConfigMapDeleted(obj interface{}) {
 	configMap := obj.(*v1.ConfigMap)
 	configMapKey := fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name)
 

@@ -3,6 +3,10 @@ package replicate
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
+	"time"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,12 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"log"
-	"strings"
-	"time"
 )
 
-type SecretReplicator struct {
+type secretReplicator struct {
 	client     kubernetes.Interface
 	store      cache.Store
 	controller cache.Controller
@@ -24,8 +25,9 @@ type SecretReplicator struct {
 	dependencyMap map[string][]string
 }
 
-func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration) *SecretReplicator {
-	repl := SecretReplicator{
+// NewSecretReplicator creates a new secret replicator
+func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration) Replicator {
+	repl := secretReplicator{
 		client:        client,
 		dependencyMap: make(map[string][]string),
 	}
@@ -54,12 +56,12 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 	return &repl
 }
 
-func (r *SecretReplicator) Run() {
+func (r *secretReplicator) Run() {
 	log.Printf("running secret controller")
 	r.controller.Run(wait.NeverStop)
 }
 
-func (r *SecretReplicator) SecretAdded(obj interface{}) {
+func (r *secretReplicator) SecretAdded(obj interface{}) {
 	secret := obj.(*v1.Secret)
 	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
@@ -101,7 +103,7 @@ func (r *SecretReplicator) SecretAdded(obj interface{}) {
 	r.replicateSecret(secret, sourceSecret)
 }
 
-func (r *SecretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
+func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
 	targetVersion, ok := secret.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceSecret.ResourceVersion
 
@@ -136,7 +138,7 @@ func (r *SecretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 	return nil
 }
 
-func (r *SecretReplicator) secretFromStore(key string) (*v1.Secret, error) {
+func (r *secretReplicator) secretFromStore(key string) (*v1.Secret, error) {
 	obj, exists, err := r.store.GetByKey(key)
 	if err != nil {
 		return nil, fmt.Errorf("could not get secret %s: %s", key, err)
@@ -154,7 +156,7 @@ func (r *SecretReplicator) secretFromStore(key string) (*v1.Secret, error) {
 	return secret, nil
 }
 
-func (r *SecretReplicator) updateDependents(secret *v1.Secret, dependents []string) error {
+func (r *secretReplicator) updateDependents(secret *v1.Secret, dependents []string) error {
 	for _, dependentKey := range dependents {
 		log.Printf("updating dependent secret %s/%s -> %s", secret.Namespace, secret.Name, dependentKey)
 
@@ -175,7 +177,7 @@ func (r *SecretReplicator) updateDependents(secret *v1.Secret, dependents []stri
 	return nil
 }
 
-func (r *SecretReplicator) SecretDeleted(obj interface{}) {
+func (r *secretReplicator) SecretDeleted(obj interface{}) {
 	secret := obj.(*v1.Secret)
 	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
