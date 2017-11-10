@@ -1,9 +1,12 @@
 package replicate
 
 import (
+	"encoding/json"
+	"fmt"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -11,9 +14,6 @@ import (
 	"log"
 	"strings"
 	"time"
-	"fmt"
-	"k8s.io/apimachinery/pkg/types"
-	"encoding/json"
 )
 
 type SecretReplicator struct {
@@ -26,7 +26,7 @@ type SecretReplicator struct {
 
 func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration) *SecretReplicator {
 	repl := SecretReplicator{
-		client: client,
+		client:        client,
 		dependencyMap: make(map[string][]string),
 	}
 
@@ -192,7 +192,7 @@ func (r *SecretReplicator) SecretDeleted(obj interface{}) {
 			continue
 		}
 
-		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"},}
+		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"}}
 		patchBody, err := json.Marshal(&patch)
 
 		if err != nil {

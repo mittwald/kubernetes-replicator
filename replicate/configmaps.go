@@ -1,9 +1,12 @@
 package replicate
 
 import (
+	"encoding/json"
+	"fmt"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -11,9 +14,6 @@ import (
 	"log"
 	"strings"
 	"time"
-	"fmt"
-	"k8s.io/apimachinery/pkg/types"
-	"encoding/json"
 )
 
 type ConfigMapReplicator struct {
@@ -188,7 +188,7 @@ func (r *ConfigMapReplicator) ConfigMapDeleted(obj interface{}) {
 			continue
 		}
 
-		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"},}
+		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"}}
 		patchBody, err := json.Marshal(&patch)
 
 		if err != nil {

@@ -3,7 +3,7 @@ package main
 import "time"
 
 type Flags struct {
-	Kubeconfig string
+	Kubeconfig    string
 	ResyncPeriodS string
-	ResyncPeriod time.Duration
+	ResyncPeriod  time.Duration
 }
