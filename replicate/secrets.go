@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -107,7 +105,7 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 
 func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
 	// make sure replication is allowed
-	if ok, err := r.isReplicationPermitted(secret, sourceSecret); !ok {
+	if ok, err := isReplicationPermitted(&secret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
 		// skip replication
 		log.Printf("Error %s", err)
 		return err
@@ -145,38 +143,6 @@ func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 
 	r.store.Update(s)
 	return nil
-}
-
-func (r *secretReplicator) isReplicationPermitted(secret *v1.Secret, sourceSecret *v1.Secret) (bool, error) {
-	// make sure source object allows replication
-	annotationAllowed, ok := sourceSecret.Annotations[ReplicationAllowed]
-	if !ok {
-		return false, fmt.Errorf("source secret %s/%s does not allow replication. %s will not be replicated", sourceSecret.Namespace, sourceSecret.Name, secret.Name)
-	}
-	annotationAllowedBool, err := strconv.ParseBool(annotationAllowed)
-
-	// check if source secret allows replication
-	if err != nil || !annotationAllowedBool {
-		return false, fmt.Errorf("source secret %s/%s does not allow replication. %s will not be replicated", sourceSecret.Namespace, sourceSecret.Name, secret.Name)
-	}
-
-	// check if the target namespace is permitted
-	annotationAllowedNamespaces, ok := sourceSecret.Annotations[ReplicationAllowedNamespaces]
-	if !ok {
-		return false, fmt.Errorf("source secret %s/%s does not allow replication in namespace %s. %s will not be replicated", sourceSecret.Namespace, sourceSecret.Name, secret.Namespace, secret.Name)
-	}
-	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
-	atleastOneAllowed := false
-	for _, ns := range allowedNamespaces {
-		if matched, _ := regexp.MatchString(ns, secret.Namespace); matched {
-			atleastOneAllowed = true
-			break
-		}
-	}
-	if !atleastOneAllowed {
-		return false, fmt.Errorf("source secret %s/%s does not allow replication in namespace %s. %s will not be replicated", sourceSecret.Namespace, sourceSecret.Name, secret.Namespace, secret.Name)
-	}
-	return true, nil
 }
 
 func (r *secretReplicator) secretFromStore(key string) (*v1.Secret, error) {

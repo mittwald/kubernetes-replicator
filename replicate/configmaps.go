@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -105,7 +103,7 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 
 func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
 	// make sure replication is allowed
-	if ok, err := r.isReplicationPermitted(configMap, sourceConfigMap); !ok {
+	if ok, err := isReplicationPermitted(&configMap.ObjectMeta, &sourceConfigMap.ObjectMeta); !ok {
 		// skip replication
 		log.Printf("Error %s", err)
 		return err
@@ -141,38 +139,6 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 
 	r.store.Update(s)
 	return nil
-}
-
-func (r *configMapReplicator) isReplicationPermitted(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) (bool, error) {
-	// make sure source object allows replication
-	annotationAllowed, ok := sourceConfigMap.Annotations[ReplicationAllowed]
-	if !ok {
-		return false, fmt.Errorf("source configmap %s/%s does not allow replication. %s will not be replicated", sourceConfigMap.Namespace, sourceConfigMap.Name, configMap.Name)
-	}
-	annotationAllowedBool, err := strconv.ParseBool(annotationAllowed)
-
-	// check if source allows replication
-	if err != nil || !annotationAllowedBool {
-		return false, fmt.Errorf("source configmap %s/%s does not allow replication. %s will not be replicated", sourceConfigMap.Namespace, sourceConfigMap.Name, configMap.Name)
-	}
-
-	// check if the target namespace is permitted
-	annotationAllowedNamespaces, ok := sourceConfigMap.Annotations[ReplicationAllowedNamespaces]
-	if !ok {
-		return false, fmt.Errorf("source configmap %s/%s does not allow replication in namespace %s. %s will not be replicated", sourceConfigMap.Namespace, sourceConfigMap.Name, configMap.Namespace, configMap.Name)
-	}
-	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
-	atleastOneAllowed := false
-	for _, ns := range allowedNamespaces {
-		if matched, _ := regexp.MatchString(ns, configMap.Namespace); matched {
-			atleastOneAllowed = true
-			break
-		}
-	}
-	if !atleastOneAllowed {
-		return false, fmt.Errorf("source configmap %s/%s does not allow replication in namespace %s. %s will not be replicated", sourceConfigMap.Namespace, sourceConfigMap.Name, configMap.Namespace, configMap.Name)
-	}
-	return true, nil
 }
 
 func (r *configMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, error) {
