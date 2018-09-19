@@ -1,6 +1,6 @@
-package replicate
+package common
 
-// Annotations that are used to control this controller's behaviour
+// Annotations that are used to control this Controller's behaviour
 const (
 	ReplicateFromAnnotation         = "replicator.v1.mittwald.de/replicate-from"
 	ReplicatedAtAnnotation          = "replicator.v1.mittwald.de/replicated-at"
@@ -8,4 +8,5 @@ const (
 	ReplicatedKeysAnnotation        = "replicator.v1.mittwald.de/replicated-keys"
 	ReplicationAllowed              = "replicator.v1.mittwald.de/replication-allowed"
 	ReplicationAllowedNamespaces    = "replicator.v1.mittwald.de/replication-allowed-namespaces"
+	ReplicateTo                     = "replicator.v1.mittwald.de/replicate-to"
 )

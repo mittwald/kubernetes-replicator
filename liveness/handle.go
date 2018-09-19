@@ -3,9 +3,8 @@ package liveness
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	"net/http"
-
-	"github.com/mittwald/kubernetes-replicator/replicate"
 )
 
 type response struct {
@@ -15,7 +14,7 @@ type response struct {
 // Handler implements a HTTP response handler that reports on the current
 // liveness status of the controller
 type Handler struct {
-	Replicators []replicate.Replicator
+	Replicators []common.Replicator
 }
 
 func (h *Handler) notReadyComponents() []string {
@@ -32,6 +31,7 @@ func (h *Handler) notReadyComponents() []string {
 	return notReady
 }
 
+//noinspection GoUnusedParameter
 func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	r := response{
 		NotReady: h.notReadyComponents(),

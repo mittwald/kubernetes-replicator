@@ -1,3 +1,13 @@
+# Directory-based project format
 /.idea
+# File-based project format
+/*.iws
+/*.iml
 /kubernetes-replicator
+
+# Mock clases
+**/*_mock.go
+
+# Target output
+/replicator/target
 /dist
