@@ -8,6 +8,14 @@ secrets and config maps available in multiple namespaces.
 
 ## Deployment
 
+### Using Helm
+
+```shellsession
+$ helm upgrade --install kubernetes-replicator ./deploy/helm-chart/kubernetes-replicator
+```
+
+### Manual
+
 ```shellsession
 $ # Create roles and service accounts
 $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replicator/master/deploy/rbac.yaml
