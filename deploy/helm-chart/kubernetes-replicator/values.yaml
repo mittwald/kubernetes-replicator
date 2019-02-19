@@ -4,7 +4,7 @@
 
 image:
   repository: quay.io/mittwald/kubernetes-replicator
-  tag: v1.0.0-alpha1
+  tag: stable
   pullPolicy: IfNotPresent
 
 nameOverride: ""
