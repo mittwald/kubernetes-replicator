@@ -1,9 +1,10 @@
 language: go
 go:
-  - 1.8
+  - 1.11
 
 install: []
 
 script:
   - go vet $(go list ./... | grep -v vendor)
+  - go test ./...
   - go build
