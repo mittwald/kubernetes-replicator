@@ -17,4 +17,5 @@ type replicatorProps struct {
 // replicators shoud adhere to
 type Replicator interface {
 	Run()
+	Synced() bool
 }
