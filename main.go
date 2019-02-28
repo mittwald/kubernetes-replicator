@@ -1,12 +1,14 @@
 package main
 
-import "k8s.io/client-go/kubernetes"
 import (
 	"flag"
 	"log"
+	"net/http"
 	"time"
 
+	"github.com/mittwald/kubernetes-replicator/liveness"
 	"github.com/mittwald/kubernetes-replicator/replicate"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -17,6 +19,7 @@ func init() {
 	var err error
 	flag.StringVar(&f.Kubeconfig, "kubeconfig", "", "path to Kubernetes config file")
 	flag.StringVar(&f.ResyncPeriodS, "resync-period", "30m", "resynchronization period")
+	flag.StringVar(&f.StatusAddr, "status-addr", ":9102", "listen address for status and monitoring server")
 	flag.Parse()
 
 	f.ResyncPeriod, err = time.ParseDuration(f.ResyncPeriodS)
@@ -44,11 +47,23 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
+	secretRepl := replicate.NewSecretReplicator(client, f.ResyncPeriod)
+	configMapRepl := replicate.NewConfigMapReplicator(client, f.ResyncPeriod)
+
 	go func() {
-		repl := replicate.NewSecretReplicator(client, f.ResyncPeriod)
-		repl.Run()
+		secretRepl.Run()
 	}()
 
-	repl := replicate.NewConfigMapReplicator(client, f.ResyncPeriod)
-	repl.Run()
+	go func() {
+		configMapRepl.Run()
+	}()
+
+	h := liveness.Handler{
+		Replicators: []replicate.Replicator{secretRepl, configMapRepl},
+	}
+
+	log.Printf("starting liveness monitor at %s", f.StatusAddr)
+
+	http.Handle("/healthz", &h)
+	http.ListenAndServe(f.StatusAddr, nil)
 }

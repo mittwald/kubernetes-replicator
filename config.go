@@ -6,4 +6,5 @@ type flags struct {
 	Kubeconfig    string
 	ResyncPeriodS string
 	ResyncPeriod  time.Duration
+	StatusAddr    string
 }

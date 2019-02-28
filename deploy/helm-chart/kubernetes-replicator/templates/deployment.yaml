@@ -23,6 +23,17 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: health
+              containerPort: 9102
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       serviceAccountName: {{ include "kubernetes-replicator.name" . }}
