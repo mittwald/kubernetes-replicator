@@ -21,11 +21,16 @@ func (r *MockReplicator) Synced() bool {
 	return r.synced
 }
 
-func TestReturns200IfAllReplicatorsAreSynced(t *testing.T) {
+func buildReqRes(t *testing.T) (*http.Request, *httptest.ResponseRecorder) {
 	req, err := http.NewRequest("GET", "/status", nil)
 	res := httptest.NewRecorder()
 
 	assert.Nil(t, err)
+	return req, res
+}
+
+func TestReturns200IfAllReplicatorsAreSynced(t *testing.T) {
+	req, res := buildReqRes(t)
 
 	handler := Handler{
 		Replicators: []replicate.Replicator{
@@ -40,10 +45,7 @@ func TestReturns200IfAllReplicatorsAreSynced(t *testing.T) {
 }
 
 func TestReturns503IfOneReplicatorIsNotSynced(t *testing.T) {
-	req, err := http.NewRequest("GET", "/status", nil)
-	res := httptest.NewRecorder()
-
-	assert.Nil(t, err)
+	req, res := buildReqRes(t)
 
 	handler := Handler{
 		Replicators: []replicate.Replicator{
