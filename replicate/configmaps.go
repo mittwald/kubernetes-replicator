@@ -106,6 +106,13 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 }
 
 func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
+	// make sure replication is allowed
+	if ok, err := isReplicationPermitted(&configMap.ObjectMeta, &sourceConfigMap.ObjectMeta); !ok {
+		// skip replication
+		log.Printf("Error %s", err)
+		return err
+	}
+
 	targetVersion, ok := configMap.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceConfigMap.ResourceVersion
 

@@ -108,6 +108,13 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 }
 
 func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
+	// make sure replication is allowed
+	if ok, err := isReplicationPermitted(&secret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
+		// skip replication
+		log.Printf("Error %s", err)
+		return err
+	}
+
 	targetVersion, ok := secret.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceSecret.ResourceVersion
 
