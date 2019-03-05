@@ -14,6 +14,7 @@ type replicatorProps struct {
 	client     kubernetes.Interface
 	store      cache.Store
 	controller cache.Controller
+	allowAll   bool
 
 	dependencyMap map[string][]string
 }
@@ -28,7 +29,11 @@ type Replicator interface {
 // Checks if replication is allowed in annotations of the source object
 // Returns true if replication is allowed. If replication is not allowed returns false with
 // error message
-func isReplicationPermitted(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
+func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
+	if r.allowAll {
+		return true, nil
+	}
+
 	// make sure source object allows replication
 	annotationAllowed, ok := sourceObject.Annotations[ReplicationAllowed]
 	if !ok {
@@ -53,6 +58,8 @@ func isReplicationPermitted(object *metav1.ObjectMeta, sourceObject *metav1.Obje
 	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
 	allowed := false
 	for _, ns := range allowedNamespaces {
+		ns := strings.TrimSpace(ns)
+
 		if matched, _ := regexp.MatchString(ns, object.Namespace); matched {
 			allowed = true
 			break

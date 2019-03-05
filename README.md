@@ -27,17 +27,18 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ### 1. Create the source secret
 
-- If a secret or configMap needs to be replicated to other namespaces, annotations should be added in that object permitting replication. 
-  - Add `replicator.v1.mittwald.de/replication-allowed` annotation with value `True` indicating that the object can be replicated.
-  - Add `replicator.v1.mittwald.de/replication-allowed-namespaces` annotation. Value of this annotation should contain a comma separated list or permitted namespaces or regular expressions. for e.g. `namespace-1,my-ns-2,app-ns-[0-9]*`, in this case replication will be performed only names `namespace-1`, `my-ns-2` and any namespace that matches the regular expression `app-ns-[0-9]*`.
+If a secret or configMap needs to be replicated to other namespaces, annotations should be added in that object permitting replication.
+ 
+  - Add `replicator.v1.mittwald.de/replication-allowed` annotation with value `true` indicating that the object can be replicated.
+  - Add `replicator.v1.mittwald.de/replication-allowed-namespaces` annotation. Value of this annotation should contain a comma separated list of permitted namespaces or regular expressions. For example `namespace-1,my-ns-2,app-ns-[0-9]*`: in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` as well as any namespace that matches the regular expression `app-ns-[0-9]*`.
 
     ```yaml
     apiVersion: v1
     kind: Secret
     metadata:
       annotations:
-        replicator.v1.mittwald.de/replicate-allowed: True
-        replicator.v1.mittwald.de/replicate-allowed-namespaces: "my-ns-1,namespace-[0-9]*"
+        replicator.v1.mittwald.de/replication-allowed: "true"
+        replicator.v1.mittwald.de/replication-allowed-namespaces: "my-ns-1,namespace-[0-9]*"
     data:
       key1: <value>
     ```
@@ -45,15 +46,15 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 ### 2. Create empty secret
 
 
-- Add the annotation `replicator.v1.mittwald.de/replicate-from` to any Kubernetes secret or config map object. The value of that annotation should contain the the name of another secret or config map (using `<namespace>/<name>` notation).
+Add the annotation `replicator.v1.mittwald.de/replicate-from` to any Kubernetes secret or config map object. The value of that annotation should contain the the name of another secret or config map (using `<namespace>/<name>` notation).
 
-  ```yaml
-  apiVersion: v1
-  kind: Secret
-  metadata:
-    annotations:
-      replicator.v1.mittwald.de/replicate-from: default/some-secret
-  data: {}
-  ```
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    replicator.v1.mittwald.de/replicate-from: default/some-secret
+data: {}
+```
 
-  The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in sync.   
+The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in sync.   

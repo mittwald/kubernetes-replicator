@@ -20,6 +20,7 @@ func init() {
 	flag.StringVar(&f.Kubeconfig, "kubeconfig", "", "path to Kubernetes config file")
 	flag.StringVar(&f.ResyncPeriodS, "resync-period", "30m", "resynchronization period")
 	flag.StringVar(&f.StatusAddr, "status-addr", ":9102", "listen address for status and monitoring server")
+	flag.BoolVar(&f.AllowAll, "allow-all", false, "allow replication of all secrets (CAUTION: only use when you know what you're doing)")
 	flag.Parse()
 
 	f.ResyncPeriod, err = time.ParseDuration(f.ResyncPeriodS)
@@ -47,8 +48,8 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
-	secretRepl := replicate.NewSecretReplicator(client, f.ResyncPeriod)
-	configMapRepl := replicate.NewConfigMapReplicator(client, f.ResyncPeriod)
+	secretRepl := replicate.NewSecretReplicator(client, f.ResyncPeriod, f.AllowAll)
+	configMapRepl := replicate.NewConfigMapReplicator(client, f.ResyncPeriod, f.AllowAll)
 
 	go func() {
 		secretRepl.Run()
