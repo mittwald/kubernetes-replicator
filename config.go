@@ -7,4 +7,5 @@ type flags struct {
 	ResyncPeriodS string
 	ResyncPeriod  time.Duration
 	StatusAddr    string
+	AllowAll      bool
 }

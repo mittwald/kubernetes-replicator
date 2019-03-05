@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,9 +22,10 @@ type configMapReplicator struct {
 }
 
 // NewConfigMapReplicator creates a new config map replicator
-func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration) Replicator {
+func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := configMapReplicator{
 		replicatorProps: replicatorProps{
+			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
 		},
@@ -106,6 +107,12 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 }
 
 func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
+	// make sure replication is allowed
+	if ok, err := r.isReplicationPermitted(&configMap.ObjectMeta, &sourceConfigMap.ObjectMeta); !ok {
+		log.Printf("replication of config map %s/%s is not permitted: %s", sourceConfigMap.Namespace, sourceConfigMap.Name, err)
+		return err
+	}
+
 	targetVersion, ok := configMap.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceConfigMap.ResourceVersion
 

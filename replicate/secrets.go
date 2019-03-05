@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,18 +18,17 @@ import (
 )
 
 type secretReplicator struct {
-	client     kubernetes.Interface
-	store      cache.Store
-	controller cache.Controller
-
-	dependencyMap map[string][]string
+	replicatorProps
 }
 
 // NewSecretReplicator creates a new secret replicator
-func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration) Replicator {
+func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := secretReplicator{
-		client:        client,
-		dependencyMap: make(map[string][]string),
+		replicatorProps: replicatorProps{
+			allowAll:      allowAll,
+			client:        client,
+			dependencyMap: make(map[string][]string),
+		},
 	}
 
 	store, controller := cache.NewInformer(
@@ -108,6 +107,12 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 }
 
 func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
+	// make sure replication is allowed
+	if ok, err := r.isReplicationPermitted(&secret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
+		log.Printf("replication of secret %s/%s is not permitted: %s", sourceSecret.Namespace, sourceSecret.Name, err)
+		return err
+	}
+
 	targetVersion, ok := secret.Annotations[ReplicatedFromVersionAnnotation]
 	sourceVersion := sourceSecret.ResourceVersion
 
