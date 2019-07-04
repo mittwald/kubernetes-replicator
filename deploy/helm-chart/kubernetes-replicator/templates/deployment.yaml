@@ -36,7 +36,7 @@ spec:
               port: health
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      serviceAccountName: {{ include "kubernetes-replicator.name" . }}
+      serviceAccountName: {{ include "kubernetes-replicator.fullname" . }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
