@@ -130,6 +130,14 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 	for key, value := range sourceConfigMap.Data {
 		configMapCopy.Data[key] = value
 	}
+	
+	if sourceConfigMap.BinaryData != nil {
+		configMapCopy.BinaryData = make(map[string]string)
+		for key, value := range sourceConfigMap.BinaryData {
+			configMapCopy.BinaryData[key] = value
+		}
+	}
+
 
 	log.Printf("updating config map %s/%s", configMap.Namespace, configMap.Name)
 
