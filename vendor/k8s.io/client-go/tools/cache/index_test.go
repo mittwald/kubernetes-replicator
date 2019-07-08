@@ -17,12 +17,12 @@ limitations under the License.
 package cache
 
 import (
+	"k8s.io/apimachinery/pkg/util/sets"
 	"strings"
 	"testing"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 func testIndexFunc(obj interface{}) ([]string, error) {
@@ -71,46 +71,43 @@ func TestMultiIndexKeys(t *testing.T) {
 	index.Add(pod2)
 	index.Add(pod3)
 
-	erniePods, err := index.ByIndex("byUser", "ernie")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(erniePods) != 2 {
-		t.Errorf("Expected 2 pods but got %v", len(erniePods))
-	}
-
-	bertPods, err := index.ByIndex("byUser", "bert")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(bertPods) != 2 {
-		t.Errorf("Expected 2 pods but got %v", len(bertPods))
-	}
-
-	oscarPods, err := index.ByIndex("byUser", "oscar")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(oscarPods) != 1 {
-		t.Errorf("Expected 1 pods but got %v", len(erniePods))
-	}
-
-	ernieAndBertKeys, err := index.Index("byUser", pod1)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(ernieAndBertKeys) != 3 {
-		t.Errorf("Expected 3 pods but got %v", len(ernieAndBertKeys))
+	expected := map[string]sets.String{}
+	expected["ernie"] = sets.NewString("one", "tre")
+	expected["bert"] = sets.NewString("one", "two")
+	expected["elmo"] = sets.NewString("tre")
+	expected["oscar"] = sets.NewString("two")
+	expected["elmo"] = sets.NewString() // let's just make sure we don't get anything back in this case
+	{
+		for k, v := range expected {
+			found := sets.String{}
+			indexResults, err := index.ByIndex("byUser", k)
+			if err != nil {
+				t.Errorf("Unexpected error %v", err)
+			}
+			for _, item := range indexResults {
+				found.Insert(item.(*v1.Pod).Name)
+			}
+			items := v.List()
+			if !found.HasAll(items...) {
+				t.Errorf("missing items, index %s, expected %v but found %v", k, items, found.List())
+			}
+		}
 	}
 
 	index.Delete(pod3)
-	erniePods, err = index.ByIndex("byUser", "ernie")
+	erniePods, err := index.ByIndex("byUser", "ernie")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if len(erniePods) != 1 {
 		t.Errorf("Expected 1 pods but got %v", len(erniePods))
 	}
+	for _, erniePod := range erniePods {
+		if erniePod.(*v1.Pod).Name != "one" {
+			t.Errorf("Expected only 'one' but got %s", erniePod.(*v1.Pod).Name)
+		}
+	}
+
 	elmoPods, err := index.ByIndex("byUser", "elmo")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -119,19 +116,19 @@ func TestMultiIndexKeys(t *testing.T) {
 		t.Errorf("Expected 0 pods but got %v", len(elmoPods))
 	}
 
-	obj, err := scheme.Scheme.DeepCopy(pod2)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	copyOfPod2 := obj.(*v1.Pod)
+	copyOfPod2 := pod2.DeepCopy()
 	copyOfPod2.Annotations["users"] = "oscar"
 	index.Update(copyOfPod2)
-	bertPods, err = index.ByIndex("byUser", "bert")
+	bertPods, err := index.ByIndex("byUser", "bert")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if len(bertPods) != 1 {
 		t.Errorf("Expected 1 pods but got %v", len(bertPods))
 	}
-
+	for _, bertPod := range bertPods {
+		if bertPod.(*v1.Pod).Name != "one" {
+			t.Errorf("Expected only 'one' but got %s", bertPod.(*v1.Pod).Name)
+		}
+	}
 }

@@ -1,7 +1,7 @@
 package: github.com/mittwald/kubernetes-replicator
 import:
 - package: k8s.io/client-go
-  version: ^5.0.1
+  version: ^10.0.0
 - package: github.com/stretchr/testify
   version: ^1.3.0
   subpackages:
