@@ -3,40 +3,32 @@ module github.com/mittwald/kubernetes-replicator
 go 1.12
 
 require (
-	github.com/PuerkitoBio/purell v1.0.0
-	github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2
-	github.com/davecgh/go-spew v1.1.0
-	github.com/emicklei/go-restful v0.0.0-20170410110728-ff4f55a20633
-	github.com/emicklei/go-restful-swagger12 v0.0.0-20170208215640-dcef7f557305
-	github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680
-	github.com/go-openapi/jsonpointer v0.0.0-20160704185906-46af16f9f7b1
-	github.com/go-openapi/jsonreference v0.0.0-20160704190145-13c6e3589ad9
-	github.com/go-openapi/spec v0.0.0-20160808142527-6aced65f8501
-	github.com/go-openapi/swag v0.0.0-20160704191624-1d0bd113de87
-	github.com/gogo/protobuf v0.0.0-20170330071051-c0656edd0d9e
-	github.com/golang/glog v0.0.0-20141105023935-44145f04b68c
-	github.com/golang/protobuf v0.0.0-20161109072736-4bd1920723d7
-	github.com/google/btree v0.0.0-20160524151835-7d79101e329e
-	github.com/google/gofuzz v0.0.0-20161122191042-44d81051d367
-	github.com/googleapis/gnostic v0.0.0-20170729233727-0c5108395e2d
-	github.com/gregjones/httpcache v0.0.0-20170728041850-787624de3eb7
-	github.com/hashicorp/golang-lru v0.0.0-20160207214719-a0d98a5f2880
-	github.com/howeyc/gopass v0.0.0-20170109162249-bf9dde6d0d2c
-	github.com/imdario/mergo v0.0.0-20141206190957-6633656539c1
-	github.com/json-iterator/go v0.0.0-20170829155851-36b14963da70
-	github.com/juju/ratelimit v0.0.0-20170523012141-5b9ff8664717
-	github.com/mailru/easyjson v0.0.0-20160728113105-d5b7844b561a
-	github.com/peterbourgon/diskv v2.0.1+incompatible
-	github.com/spf13/pflag v0.0.0-20170130214245-9ff6c6923cff
+	github.com/gogo/protobuf v1.2.1 // indirect
+	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
+	github.com/golang/protobuf v1.3.2 // indirect
+	github.com/google/gofuzz v1.0.0 // indirect
+	github.com/googleapis/gnostic v0.3.0 // indirect
+	github.com/hashicorp/golang-lru v0.5.1 // indirect
+	github.com/imdario/mergo v0.3.7 // indirect
+	github.com/json-iterator/go v1.1.6 // indirect
+	github.com/kr/pretty v0.1.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.3.0
-	golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
-	golang.org/x/net v0.0.0-20170809000501-1c05540f6879
-	golang.org/x/sys v0.0.0-20170901181214-7ddbeae9ae08
-	golang.org/x/text v0.0.0-20170810154203-b19bf474d317
-	gopkg.in/inf.v0 v0.9.0
-	gopkg.in/yaml.v2 v2.0.0-20150924142314-53feefa2559f
-	k8s.io/api v0.0.0-20171016062617-6c6dac027722
-	k8s.io/apimachinery v0.0.0-20170925234155-019ae5ada31d
-	k8s.io/client-go v10.0.0+incompatible
-	k8s.io/kube-openapi v0.0.0-20170830100654-868f2f29720b
+	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect
+	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
+	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
+	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb // indirect
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
+	google.golang.org/appengine v1.6.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.2.2 // indirect
+	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
+	k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d
+	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
+	k8s.io/klog v0.3.3 // indirect
+	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
+	sigs.k8s.io/yaml v1.1.0 // indirect
 )
