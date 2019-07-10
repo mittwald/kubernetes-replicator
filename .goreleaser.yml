@@ -1,0 +1,36 @@
+before:
+  hooks:
+    - go vet $(go list ./...)
+    - go test ./...
+    - go build
+builds:
+  -
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    goos:
+      - linux
+    goarch:
+      - amd64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+dockers:
+  -
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator:latest
+    - quay.io/mittwald/kubernetes-replicator:stable
+    - quay.io/mittwald/kubernetes-replicator:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator:{{ .Tag }}-go{{ .Env.GO_VERSION }}
+    binaries:
+      - kubernetes-replicator
+    goos: linux
+    goarch: amd64
+    goarm: ''
