@@ -132,6 +132,13 @@ func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 		copy(newValue, value)
 		secretCopy.Data[key] = newValue
 	}
+	
+	if sourceSecret.StringData != nil {
+		secretCopy.StringData = make(map[string]string)
+		for key, value := range sourceSecret.StringData {
+			secretCopy.StringData[key] = value
+		}
+	}
 
 	log.Printf("updating secret %s/%s", secret.Namespace, secret.Name)
 
