@@ -1,6 +1,6 @@
 before:
   hooks:
-    - go vet $(go list ./...)
+    - go vet ./...
     - go test ./...
     - go build
 builds:
