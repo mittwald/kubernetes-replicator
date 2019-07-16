@@ -24,7 +24,7 @@ before_deploy:
 deploy:
   - provider: script
     skip_cleanup: true
-    script: |-
+    script: |
       curl -sL https://git.io/goreleaser | bash -s -- --snapshot --skip-publish --rm-dist && \
         docker push "${FULL_IMAGE}:latest" && \
         docker push "${FULL_IMAGE}-amd64:latest" && \
