@@ -27,7 +27,6 @@ deploy:
     script: >-
       curl -sL https://git.io/goreleaser | bash -s -- --snapshot --skip-publish --rm-dist &&
       docker push "${FULL_IMAGE}:latest" &&
-      docker push "${FULL_IMAGE}-amd64:latest" &&
       docker push "${FULL_IMAGE}-arm64:latest" &&
       docker push "${FULL_IMAGE}-armv5:latest" &&
       docker push "${FULL_IMAGE}-armv6:latest" &&
