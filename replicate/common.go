@@ -2,12 +2,13 @@ package replicate
 
 import (
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"regexp"
 	"strconv"
 	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 type replicatorProps struct {
@@ -73,4 +74,13 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 			sourceObject.Namespace, sourceObject.Name, object.Namespace, object.Name)
 	}
 	return allowed, err
+}
+
+func isItemInList(itemList []string, key string) bool {
+	for _, value := range itemList {
+		if value == key {
+			return true
+		}
+	}
+	return false
 }

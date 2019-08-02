@@ -50,6 +50,8 @@ func main() {
 
 	secretRepl := replicate.NewSecretReplicator(client, f.ResyncPeriod, f.AllowAll)
 	configMapRepl := replicate.NewConfigMapReplicator(client, f.ResyncPeriod, f.AllowAll)
+	roleRepl := replicate.NewRoleReplicator(client, f.ResyncPeriod, f.AllowAll)
+	roleBindingRepl := replicate.NewRoleBindingReplicator(client, f.ResyncPeriod, f.AllowAll)
 
 	go func() {
 		secretRepl.Run()
@@ -59,12 +61,23 @@ func main() {
 		configMapRepl.Run()
 	}()
 
+	go func() {
+		roleRepl.Run()
+	}()
+
+	go func() {
+		roleBindingRepl.Run()
+	}()
+
 	h := liveness.Handler{
-		Replicators: []replicate.Replicator{secretRepl, configMapRepl},
+		Replicators: []replicate.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl},
 	}
 
 	log.Printf("starting liveness monitor at %s", f.StatusAddr)
 
 	http.Handle("/healthz", &h)
-	http.ListenAndServe(f.StatusAddr, nil)
+	err = http.ListenAndServe(f.StatusAddr, nil)
+	if err != nil{
+		log.Fatal(err)
+	}
 }
