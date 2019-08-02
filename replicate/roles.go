@@ -64,8 +64,6 @@ func (r *roleReplicator) Run() {
 	r.controller.Run(wait.NeverStop)
 }
 
-// function invoked when a new role is added
-// if the role has ReplicateFromAnnotation the source role and dest role get added to dependencyMap
 func (r *roleReplicator) RoleAdded(obj interface{}) {
 	role := obj.(*rbacv1.Role)
 	roleKey := fmt.Sprintf("%s/%s", role.Namespace, role.Name)

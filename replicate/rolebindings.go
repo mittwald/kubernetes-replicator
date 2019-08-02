@@ -64,8 +64,6 @@ func (r *roleBindingReplicator) Run() {
 	r.controller.Run(wait.NeverStop)
 }
 
-// function invoked when a new roleBinding is added
-// if the roleBinding has ReplicateFromAnnotation the source roleBinding and dest roleBinding get added to dependencyMap
 func (r *roleBindingReplicator) RoleBindingAdded(obj interface{}) {
 	roleBinding := obj.(*rbacv1.RoleBinding)
 	roleBindingKey := fmt.Sprintf("%s/%s", roleBinding.Namespace, roleBinding.Name)
