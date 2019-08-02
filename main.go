@@ -77,7 +77,7 @@ func main() {
 
 	http.Handle("/healthz", &h)
 	err = http.ListenAndServe(f.StatusAddr, nil)
-	if err != nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 }
