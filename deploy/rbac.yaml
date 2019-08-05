@@ -4,7 +4,7 @@ metadata:
   name: mittwald:replicator
 rules:
 - apiGroups: [""] # "" indicates the core API group
-  resources: ["secrets", "configmaps"]
+  resources: ["secrets", "configmaps", "roles", "rolebindings"]
   verbs: ["get", "watch", "list", "update", "patch"]
 ---
 kind: ClusterRoleBinding
