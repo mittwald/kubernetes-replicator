@@ -9,7 +9,10 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 rules:
 - apiGroups: [""] # "" indicates the core API group
-  resources: ["secrets", "configmaps", "roles", "rolebindings"]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "watch", "list", "update", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
   verbs: ["get", "watch", "list", "update", "patch"]
 ---
 kind: ClusterRoleBinding
