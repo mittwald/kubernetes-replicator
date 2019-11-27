@@ -1,16 +1,15 @@
 package replicate
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -28,6 +27,7 @@ func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Durat
 			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
+			targetMap: make(map[string]string),
 		},
 	}
 
@@ -68,42 +68,82 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 	configMap := obj.(*v1.ConfigMap)
 	configMapKey := fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name)
 
-	replicas, ok := r.dependencyMap[configMapKey]
-	if ok {
+	if val, ok := r.targetMap[configMapKey]; ok {
+		if annotation, ok := resolveAnnotation(&configMap.ObjectMeta, ReplicateToAnnotation); !ok || val != annotation {
+			log.Printf("annotation of source config map %s changed", configMapKey)
+
+			r.deleteConfigMap(val, configMap)
+			delete(r.targetMap, configMapKey)
+		}
+	}
+
+	if replicas, ok := r.dependencyMap[configMapKey]; ok {
 		log.Printf("config map %s has %d dependents", configMapKey, len(replicas))
 		r.updateDependents(configMap, replicas)
 	}
 
-	val, ok := configMap.Annotations[ReplicateFromAnnotation]
-	if !ok {
-		return
+	if val, ok := configMap.Annotations[ReplicatedFromAnnotation]; ok {
+		var sourceConfigMap *v1.ConfigMap = nil
+
+		sourceObject, exists, err := r.store.GetByKey(val)
+		if err != nil {
+			log.Printf("could not get config map %s: %s", val, err)
+			return
+
+		} else if !exists {
+			log.Printf("source config map %s deleted", val)
+
+		} else {
+			sourceConfigMap = sourceObject.(*v1.ConfigMap)
+
+			if !annotationRefersTo(&sourceConfigMap.ObjectMeta, ReplicateToAnnotation, &configMap.ObjectMeta) {
+				log.Printf("annotation of source config map %s changed", val)
+				sourceConfigMap = nil
+			}
+		}
+
+		if sourceConfigMap == nil {
+			r.doDeleteConfigMap(configMap)
+			return
+
+		} else {
+			r.installConfigMap("", configMap, sourceConfigMap)
+			return
+		}
 	}
 
-	log.Printf("config map %s/%s is replicated from %s", configMap.Namespace, configMap.Name, val)
-	v := strings.SplitN(val, "/", 2)
+	if val, ok := resolveAnnotation(&configMap.ObjectMeta, ReplicateFromAnnotation); ok {
+		log.Printf("config map %s is replicated from %s", configMapKey, val)
 
-	if len(v) < 2 {
-		return
+		if _, ok := r.dependencyMap[val]; !ok {
+			r.dependencyMap[val] = make([]string, 0, 1)
+		}
+		r.dependencyMap[val] = append(r.dependencyMap[val], configMapKey)
+
+		if sourceObject, exists, err := r.store.GetByKey(val); err != nil {
+			log.Printf("could not get config map %s: %s", val, err)
+			return
+
+		} else if !exists {
+			log.Printf("source config map %s deleted", val)
+			r.doClearConfigMap(configMap)
+			return
+
+		} else {
+			sourceConfigMap := sourceObject.(*v1.ConfigMap)
+			r.replicateConfigMap(configMap, sourceConfigMap)
+			return
+		}
 	}
 
-	sourceObject, exists, err := r.store.GetByKey(val)
-	if err != nil {
-		log.Printf("could not get config map %s: %s", val, err)
-		return
-	} else if !exists {
-		log.Printf("could not get config map %s: does not exist", val)
+	if val, ok := resolveAnnotation(&configMap.ObjectMeta, ReplicateToAnnotation); ok {
+		log.Printf("config map %s is replicated to %s", configMapKey, val)
+
+		r.targetMap[configMapKey] = val
+
+		r.installConfigMap(val, nil, configMap)
 		return
 	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-
-	r.dependencyMap[val] = append(r.dependencyMap[val], configMapKey)
-
-	sourceConfigMap := sourceObject.(*v1.ConfigMap)
-
-	r.replicateConfigMap(configMap, sourceConfigMap)
 }
 
 func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
@@ -123,19 +163,24 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 
 	configMapCopy := configMap.DeepCopy()
 
-	if configMapCopy.Data == nil {
+	if sourceConfigMap.Data != nil {
 		configMapCopy.Data = make(map[string]string)
-	}
-
-	for key, value := range sourceConfigMap.Data {
-		configMapCopy.Data[key] = value
+		for key, value := range sourceConfigMap.Data {
+			configMapCopy.Data[key] = value
+		}
+	} else {
+		configMapCopy.Data = nil
 	}
 
 	if sourceConfigMap.BinaryData != nil {
 		configMapCopy.BinaryData = make(map[string][]byte)
 		for key, value := range sourceConfigMap.BinaryData {
-			configMapCopy.BinaryData[key] = value
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			configMapCopy.BinaryData[key] = newValue
 		}
+	} else {
+		configMapCopy.BinaryData = nil
 	}
 
 	log.Printf("updating config map %s/%s", configMap.Namespace, configMap.Name)
@@ -145,6 +190,95 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 
 	s, err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy)
 	if err != nil {
+		log.Printf("error while updating config map %s/%s: %s", configMap.Namespace, configMap.Name, err)
+		return err
+	}
+
+	r.store.Update(s)
+	return nil
+}
+
+func (r *configMapReplicator) installConfigMap(target string, targetConfigMap *v1.ConfigMap, sourceConfigMap *v1.ConfigMap) error {
+	var targetSplit []string
+	if targetConfigMap == nil {
+		targetSplit = strings.SplitN(target, "/", 2)
+
+		if len(targetSplit) != 2 {
+			err := fmt.Errorf("illformed annotation %s: expected namespace/name, got %s",
+				ReplicatedFromAnnotation, target)
+			log.Printf("%s", err)
+			return err
+		}
+
+		if targetObject, exists, err := r.store.GetByKey(target); err != nil {
+			log.Printf("could not get config map %s: %s", target, err)
+			return err
+
+		} else if exists {
+			targetConfigMap = targetObject.(*v1.ConfigMap)
+		}
+	} else {
+		targetSplit = []string{targetConfigMap.Namespace, targetConfigMap.Name}
+	}
+
+	if targetConfigMap != nil {
+		if verion, ok := targetConfigMap.Annotations[ReplicatedFromVersionAnnotation]; ok && verion == sourceConfigMap.ResourceVersion {
+			log.Printf("config map %s/%s is already up-to-date", targetConfigMap.Namespace, targetConfigMap.Name)
+			return nil
+		// make sure replication is allowed
+		} else if ok, err := r.canReplicateTo(&sourceConfigMap.ObjectMeta, &targetConfigMap.ObjectMeta); !ok {
+			log.Printf("config map %s/%s cannot be replicated to %s/%s: %s",
+				sourceConfigMap.Namespace, sourceConfigMap.Name, targetConfigMap.Namespace, targetConfigMap.Name, err)
+			return err
+		}
+	}
+
+	configMapCopy := v1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       sourceConfigMap.Kind,
+			APIVersion: sourceConfigMap.APIVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   targetSplit[0],
+			Name:        targetSplit[1],
+			Annotations: map[string]string{},
+		},
+	}
+
+	if sourceConfigMap.Data != nil {
+		configMapCopy.Data = make(map[string]string)
+		for key, value := range sourceConfigMap.Data {
+			configMapCopy.Data[key] = value
+		}
+	}
+
+	if sourceConfigMap.BinaryData != nil {
+		configMapCopy.BinaryData = make(map[string][]byte)
+		for key, value := range sourceConfigMap.BinaryData {
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			configMapCopy.BinaryData[key] = newValue
+		}
+	}
+
+	log.Printf("installing config map %s/%s", configMapCopy.Namespace, configMapCopy.Name)
+
+	configMapCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	configMapCopy.Annotations[ReplicatedFromAnnotation] = fmt.Sprintf("%s/%s",
+		sourceConfigMap.Namespace, sourceConfigMap.Name)
+	configMapCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceConfigMap.ResourceVersion
+
+	var s *v1.ConfigMap
+	var err error
+	if targetConfigMap == nil {
+		s, err = r.client.CoreV1().ConfigMaps(configMapCopy.Namespace).Create(&configMapCopy)
+	} else {
+		configMapCopy.ResourceVersion = targetConfigMap.ResourceVersion
+		s, err = r.client.CoreV1().ConfigMaps(configMapCopy.Namespace).Update(&configMapCopy)
+	}
+
+	if err != nil {
+		log.Printf("error while installing config map %s/%s: %s", configMapCopy.Namespace, configMapCopy.Name, err)
 		return err
 	}
 
@@ -170,22 +304,41 @@ func (r *configMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, err
 	return configMap, nil
 }
 
-func (r *configMapReplicator) updateDependents(configMap *v1.ConfigMap, dependents []string) error {
-	for _, dependentKey := range dependents {
-		log.Printf("updating dependent config map %s/%s -> %s", configMap.Namespace, configMap.Name, dependentKey)
+func (r *configMapReplicator) updateDependents(configMap *v1.ConfigMap, replicas []string) error {
+	configMapKey := fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name)
 
-		targetObject, exists, err := r.store.GetByKey(dependentKey)
-		if err != nil {
-			log.Printf("could not get dependent config map %s: %s", dependentKey, err)
+	sort.Strings(replicas)
+	updatedReplicas := make([]string, 0, 0)
+	var previous string
+
+	for _, dependentKey := range replicas {
+		// get rid of dupplicates in replicas
+		if previous == dependentKey {
 			continue
-		} else if !exists {
-			log.Printf("could not get dependent config map %s: does not exist", dependentKey)
+		}
+		previous = dependentKey
+
+		targetConfigMap, err := r.configMapFromStore(dependentKey)
+		if err != nil {
+			log.Printf("could not load dependent config map: %s", err)
 			continue
 		}
 
-		targetConfigMap := targetObject.(*v1.ConfigMap)
+		val, ok := resolveAnnotation(&targetConfigMap.ObjectMeta, ReplicateFromAnnotation)
+		if !ok || val != configMapKey {
+			log.Printf("annotation of dependent config map %s changed", dependentKey)
+			continue
+		}
+
+		updatedReplicas = append(updatedReplicas, dependentKey)
 
 		r.replicateConfigMap(targetConfigMap, configMap)
+	}
+
+	if len(updatedReplicas) > 0 {
+		r.dependencyMap[configMapKey] = updatedReplicas
+	} else {
+		delete(r.dependencyMap, configMapKey)
 	}
 
 	return nil
@@ -195,36 +348,119 @@ func (r *configMapReplicator) ConfigMapDeleted(obj interface{}) {
 	configMap := obj.(*v1.ConfigMap)
 	configMapKey := fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name)
 
+	if val, ok := r.targetMap[configMapKey]; ok {
+		r.deleteConfigMap(val, configMap)
+		delete(r.targetMap, configMapKey)
+	}
+
 	replicas, ok := r.dependencyMap[configMapKey]
 	if !ok {
-		log.Printf("config map %s has no dependents and can be deleted without issues", configMapKey)
 		return
 	}
 
+	sort.Strings(replicas)
+	updatedReplicas := make([]string, 0, 0)
+	var previous string
+
 	for _, dependentKey := range replicas {
-		targetConfigMap, err := r.configMapFromStore(dependentKey)
-		if err != nil {
-			log.Printf("could not load dependent config map: %s", err)
+		// get rid of dupplicates in replicas
+		if previous == dependentKey {
 			continue
 		}
+		previous = dependentKey
 
-		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"}}
-		patchBody, err := json.Marshal(&patch)
-
-		if err != nil {
-			log.Printf("error while building patch body for config map %s: %s", dependentKey, err)
-			continue
+		if ok, _ := r.clearConfigMap(dependentKey, configMap); ok {
+			updatedReplicas = append(updatedReplicas, dependentKey)
 		}
+	}
 
-		log.Printf("clearing dependent config map %s", dependentKey)
-		log.Printf("patch body: %s", string(patchBody))
-
-		s, err := r.client.CoreV1().ConfigMaps(targetConfigMap.Namespace).Patch(targetConfigMap.Name, types.JSONPatchType, patchBody)
-		if err != nil {
-			log.Printf("error while patching config map %s: %s", dependentKey, err)
-			continue
-		}
-
-		r.store.Update(s)
+	if len(updatedReplicas) > 0 {
+		r.dependencyMap[configMapKey] = updatedReplicas
+	} else {
+		delete(r.dependencyMap, configMapKey)
 	}
 }
+
+func (r *configMapReplicator) clearConfigMap(configMapKey string, sourceConfigMap *v1.ConfigMap) (bool, error) {
+	targetConfigMap, err := r.configMapFromStore(configMapKey)
+	if err != nil {
+		log.Printf("could not load dependent config map: %s", err)
+		return false, err
+	}
+
+	if !annotationRefersTo(&targetConfigMap.ObjectMeta, ReplicateFromAnnotation, &sourceConfigMap.ObjectMeta) {
+		log.Printf("annotation of dependent config map %s changed", configMapKey)
+		return false, nil
+	}
+
+	return true, r.doClearConfigMap(targetConfigMap)
+}
+
+func (r *configMapReplicator) doClearConfigMap(configMap *v1.ConfigMap) error {
+	if _, ok := configMap.Annotations[ReplicatedFromVersionAnnotation]; !ok {
+		log.Printf("config map %s/%s is already up-to-date", configMap.Namespace, configMap.Name)
+		return nil
+	}
+
+	configMapCopy := configMap.DeepCopy()
+	configMapCopy.Data = nil
+	configMapCopy.BinaryData = nil
+
+	log.Printf("clearing config map %s/%s", configMap.Namespace, configMap.Name)
+
+	configMapCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	delete(configMapCopy.Annotations, ReplicatedFromVersionAnnotation)
+
+	s, err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy)
+	if err != nil {
+		log.Printf("error while clearing config map %s/%s", configMap.Namespace, configMap.Name)
+		return err
+	}
+
+	r.store.Update(s)
+	return nil
+}
+
+func (r *configMapReplicator) deleteConfigMap(configMapKey string, sourceConfigMap *v1.ConfigMap) (bool, error) {
+	object, exists, err := r.store.GetByKey(configMapKey)
+
+	if err != nil {
+		log.Printf("could not get config map %s: %s", configMapKey, err)
+		return false, err
+
+	} else if !exists {
+		log.Printf("could not get config map %s: does not exist", configMapKey)
+		return false, nil
+	// make sure replication is allowed
+	}
+
+	configMap := object.(*v1.ConfigMap)
+
+	if ok, err := r.canReplicateTo(&sourceConfigMap.ObjectMeta, &configMap.ObjectMeta); !ok {
+		log.Printf("config map %s was not created by replication: %s", configMapKey, err)
+		return false, nil
+	// delete the config map
+	} else {
+		return true, r.doDeleteConfigMap(configMap)
+	}
+}
+
+func (r *configMapReplicator) doDeleteConfigMap(configMap *v1.ConfigMap) error {
+	log.Printf("deleting config map %s/%s", configMap.Namespace, configMap.Name)
+
+	options := metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			ResourceVersion: &configMap.ResourceVersion,
+		},
+	}
+
+	err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Delete(configMap.Name, &options)
+	if err != nil {
+		log.Printf("error while deleting config map %s/%s: %s", configMap.Namespace, configMap.Name, err)
+		return err
+	}
+
+	r.store.Delete(configMap)
+	return nil
+}
+
