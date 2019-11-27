@@ -163,14 +163,15 @@ func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 
 	secretCopy := secret.DeepCopy()
 
-	if secretCopy.Data == nil {
+	if sourceSecret.Data != nil {
 		secretCopy.Data = make(map[string][]byte)
-	}
-
-	for key, value := range sourceSecret.Data {
-		newValue := make([]byte, len(value))
-		copy(newValue, value)
-		secretCopy.Data[key] = newValue
+		for key, value := range sourceSecret.Data {
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			secretCopy.Data[key] = newValue
+		}
+	} else {
+		secretCopy.Data = nil
 	}
 
 	log.Printf("updating secret %s/%s", secret.Namespace, secret.Name)
@@ -234,16 +235,18 @@ func (r *secretReplicator) installSecret(target string, targetSecret *v1.Secret,
 			Name:        targetSplit[1],
 			Annotations: map[string]string{},
 		},
-		Data: make(map[string][]byte),
+	}
+
+	if sourceSecret.Data != nil {
+		secretCopy.Data = make(map[string][]byte)
+		for key, value := range sourceSecret.Data {
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			secretCopy.Data[key] = newValue
+		}
 	}
 
 	log.Printf("installing secret %s/%s", secretCopy.Namespace, secretCopy.Name)
-
-	for key, value := range sourceSecret.Data {
-		newValue := make([]byte, len(value))
-		copy(newValue, value)
-		secretCopy.Data[key] = newValue
-	}
 
 	secretCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	secretCopy.Annotations[ReplicatedFromAnnotation] = fmt.Sprintf("%s/%s",
