@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: replicator-deployment
+  name: replicator
   namespace: kube-system
 spec:
   replicas: 1
@@ -13,4 +13,4 @@ spec:
       serviceAccountName: replicator
       containers:
         - name: replicator
-          image: quay.io/mittwald/kubernetes-replicator:latest
+          image: asia.gcr.io/olli-iviet/kubernetes-replicator:latest
