@@ -1,16 +1,15 @@
 package replicate
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -28,6 +27,7 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
+			targetMap: make(map[string]string),
 		},
 	}
 
@@ -68,42 +68,82 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 	secret := obj.(*v1.Secret)
 	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
-	replicas, ok := r.dependencyMap[secretKey]
-	if ok {
+	if val, ok := r.targetMap[secretKey]; ok {
+		if annotation, ok := resolveAnnotation(&secret.ObjectMeta, ReplicateToAnnotation); !ok || val != annotation {
+			log.Printf("annotation of source secret %s changed", secretKey)
+
+			r.deleteSecret(val, secret)
+			delete(r.targetMap, secretKey)
+		}
+	}
+
+	if replicas, ok := r.dependencyMap[secretKey]; ok {
 		log.Printf("secret %s has %d dependents", secretKey, len(replicas))
 		r.updateDependents(secret, replicas)
 	}
 
-	val, ok := secret.Annotations[ReplicateFromAnnotation]
-	if !ok {
-		return
+	if val, ok := secret.Annotations[ReplicatedFromAnnotation]; ok {
+		var sourceSecret *v1.Secret = nil
+
+		sourceObject, exists, err := r.store.GetByKey(val)
+		if err != nil {
+			log.Printf("could not get secret %s: %s", val, err)
+			return
+
+		} else if !exists {
+			log.Printf("source secret %s deleted", val)
+
+		} else {
+			sourceSecret = sourceObject.(*v1.Secret)
+
+			if !annotationRefersTo(&sourceSecret.ObjectMeta, ReplicateToAnnotation, &secret.ObjectMeta) {
+				log.Printf("annotation of source secret %s changed", val)
+				sourceSecret = nil
+			}
+		}
+
+		if sourceSecret == nil {
+			r.doDeleteSecret(secret)
+			return
+
+		} else {
+			r.installSecret("", secret, sourceSecret)
+			return
+		}
 	}
 
-	log.Printf("secret %s/%s is replicated from %s", secret.Namespace, secret.Name, val)
-	v := strings.SplitN(val, "/", 2)
+	if val, ok := resolveAnnotation(&secret.ObjectMeta, ReplicateFromAnnotation); ok {
+		log.Printf("secret %s is replicated from %s", secretKey, val)
 
-	if len(v) < 2 {
-		return
+		if _, ok := r.dependencyMap[val]; !ok {
+			r.dependencyMap[val] = make([]string, 0, 1)
+		}
+		r.dependencyMap[val] = append(r.dependencyMap[val], secretKey)
+
+		if sourceObject, exists, err := r.store.GetByKey(val); err != nil {
+			log.Printf("could not get secret %s: %s", val, err)
+			return
+
+		} else if !exists {
+			log.Printf("source secret %s deleted", val)
+			r.doClearSecret(secret)
+			return
+
+		} else {
+			sourceSecret := sourceObject.(*v1.Secret)
+			r.replicateSecret(secret, sourceSecret)
+			return
+		}
 	}
 
-	sourceObject, exists, err := r.store.GetByKey(val)
-	if err != nil {
-		log.Printf("could not get secret %s: %s", val, err)
-		return
-	} else if !exists {
-		log.Printf("could not get secret %s: does not exist", val)
+	if val, ok := resolveAnnotation(&secret.ObjectMeta, ReplicateToAnnotation); ok {
+		log.Printf("secret %s is replicated to %s", secretKey, val)
+
+		r.targetMap[secretKey] = val
+
+		r.installSecret(val, nil, secret)
 		return
 	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-
-	r.dependencyMap[val] = append(r.dependencyMap[val], secretKey)
-
-	sourceSecret := sourceObject.(*v1.Secret)
-
-	r.replicateSecret(secret, sourceSecret)
 }
 
 func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
@@ -140,6 +180,87 @@ func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 
 	s, err := r.client.CoreV1().Secrets(secret.Namespace).Update(secretCopy)
 	if err != nil {
+		log.Printf("error while updating secret %s/%s: %s", secret.Namespace, secret.Name, err)
+		return err
+	}
+
+	r.store.Update(s)
+	return nil
+}
+
+func (r *secretReplicator) installSecret(target string, targetSecret *v1.Secret, sourceSecret *v1.Secret) error {
+	var targetSplit []string
+	if targetSecret == nil {
+		targetSplit = strings.SplitN(target, "/", 2)
+
+		if len(targetSplit) != 2 {
+			err := fmt.Errorf("illformed annotation %s: expected namespace/name, got %s",
+				ReplicatedFromAnnotation, target)
+			log.Printf("%s", err)
+			return err
+		}
+
+		if targetObject, exists, err := r.store.GetByKey(target); err != nil {
+			log.Printf("could not get secret %s: %s", target, err)
+			return err
+
+		} else if exists {
+			targetSecret = targetObject.(*v1.Secret)
+		}
+	} else {
+		targetSplit = []string{targetSecret.Namespace, targetSecret.Name}
+	}
+
+	if targetSecret != nil {
+		if verion, ok := targetSecret.Annotations[ReplicatedFromVersionAnnotation]; ok && verion == sourceSecret.ResourceVersion {
+			log.Printf("secret %s/%s is already up-to-date", targetSecret.Namespace, targetSecret.Name)
+			return nil
+		// make sure replication is allowed
+		} else if ok, err := r.canReplicateTo(&sourceSecret.ObjectMeta, &targetSecret.ObjectMeta); !ok {
+			log.Printf("secret %s/%s cannot be replicated to %s/%s: %s",
+				sourceSecret.Namespace, sourceSecret.Name, targetSecret.Namespace, targetSecret.Name, err)
+			return err
+		}
+	}
+
+	secretCopy := v1.Secret{
+		Type: sourceSecret.Type,
+		TypeMeta: metav1.TypeMeta{
+			Kind:       sourceSecret.Kind,
+			APIVersion: sourceSecret.APIVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   targetSplit[0],
+			Name:        targetSplit[1],
+			Annotations: map[string]string{},
+		},
+		Data: make(map[string][]byte),
+	}
+
+	log.Printf("installing secret %s/%s", secretCopy.Namespace, secretCopy.Name)
+
+	for key, value := range sourceSecret.Data {
+		newValue := make([]byte, len(value))
+		copy(newValue, value)
+		secretCopy.Data[key] = newValue
+	}
+
+	secretCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	secretCopy.Annotations[ReplicatedFromAnnotation] = fmt.Sprintf("%s/%s",
+		sourceSecret.Namespace, sourceSecret.Name)
+	secretCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
+
+	var s *v1.Secret
+	var err error
+	if targetSecret == nil {
+		s, err = r.client.CoreV1().Secrets(secretCopy.Namespace).Create(&secretCopy)
+	} else {
+		secretCopy.ResourceVersion = targetSecret.ResourceVersion
+		s, err = r.client.CoreV1().Secrets(secretCopy.Namespace).Update(&secretCopy)
+	}
+
+	if err != nil {
+		log.Printf("error while installing secret %s/%s: %s", secretCopy.Namespace, secretCopy.Name, err)
 		return err
 	}
 
@@ -165,22 +286,41 @@ func (r *secretReplicator) secretFromStore(key string) (*v1.Secret, error) {
 	return secret, nil
 }
 
-func (r *secretReplicator) updateDependents(secret *v1.Secret, dependents []string) error {
-	for _, dependentKey := range dependents {
-		log.Printf("updating dependent secret %s/%s -> %s", secret.Namespace, secret.Name, dependentKey)
+func (r *secretReplicator) updateDependents(secret *v1.Secret, replicas []string) error {
+	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
-		targetObject, exists, err := r.store.GetByKey(dependentKey)
-		if err != nil {
-			log.Printf("could not get dependent secret %s: %s", dependentKey, err)
+	sort.Strings(replicas)
+	updatedReplicas := make([]string, 0, 0)
+	var previous string
+
+	for _, dependentKey := range replicas {
+		// get rid of dupplicates in replicas
+		if previous == dependentKey {
 			continue
-		} else if !exists {
-			log.Printf("could not get dependent secret %s: does not exist", dependentKey)
+		}
+		previous = dependentKey
+
+		targetSecret, err := r.secretFromStore(dependentKey)
+		if err != nil {
+			log.Printf("could not load dependent secret: %s", err)
 			continue
 		}
 
-		targetSecret := targetObject.(*v1.Secret)
+		val, ok := resolveAnnotation(&targetSecret.ObjectMeta, ReplicateFromAnnotation)
+		if !ok || val != secretKey {
+			log.Printf("annotation of dependent secret %s changed", dependentKey)
+			continue
+		}
+
+		updatedReplicas = append(updatedReplicas, dependentKey)
 
 		r.replicateSecret(targetSecret, secret)
+	}
+
+	if len(updatedReplicas) > 0 {
+		r.dependencyMap[secretKey] = updatedReplicas
+	} else {
+		delete(r.dependencyMap, secretKey)
 	}
 
 	return nil
@@ -190,36 +330,117 @@ func (r *secretReplicator) SecretDeleted(obj interface{}) {
 	secret := obj.(*v1.Secret)
 	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
+	if val, ok := r.targetMap[secretKey]; ok {
+		r.deleteSecret(val, secret)
+		delete(r.targetMap, secretKey)
+	}
+
 	replicas, ok := r.dependencyMap[secretKey]
 	if !ok {
-		log.Printf("secret %s has no dependents and can be deleted without issues", secretKey)
 		return
 	}
 
+	sort.Strings(replicas)
+	updatedReplicas := make([]string, 0, 0)
+	var previous string
+
 	for _, dependentKey := range replicas {
-		targetSecret, err := r.secretFromStore(dependentKey)
-		if err != nil {
-			log.Printf("could not load dependent secret: %s", err)
+		// get rid of dupplicates in replicas
+		if previous == dependentKey {
 			continue
 		}
+		previous = dependentKey
 
-		patch := []JSONPatchOperation{{Operation: "remove", Path: "/data"}}
-		patchBody, err := json.Marshal(&patch)
-
-		if err != nil {
-			log.Printf("error while building patch body for secret %s: %s", dependentKey, err)
-			continue
+		if ok, _ := r.clearSecret(dependentKey, secret); ok {
+			updatedReplicas = append(updatedReplicas, dependentKey)
 		}
-
-		log.Printf("clearing dependent secret %s", dependentKey)
-		log.Printf("patch body: %s", string(patchBody))
-
-		s, err := r.client.CoreV1().Secrets(targetSecret.Namespace).Patch(targetSecret.Name, types.JSONPatchType, patchBody)
-		if err != nil {
-			log.Printf("error while patching secret %s: %s", dependentKey, err)
-			continue
-		}
-
-		r.store.Update(s)
 	}
+
+	if len(updatedReplicas) > 0 {
+		r.dependencyMap[secretKey] = updatedReplicas
+	} else {
+		delete(r.dependencyMap, secretKey)
+	}
+}
+
+func (r *secretReplicator) clearSecret(secretKey string, sourceSecret *v1.Secret) (bool, error) {
+	targetSecret, err := r.secretFromStore(secretKey)
+	if err != nil {
+		log.Printf("could not load dependent secret: %s", err)
+		return false, err
+	}
+
+	if !annotationRefersTo(&targetSecret.ObjectMeta, ReplicateFromAnnotation, &sourceSecret.ObjectMeta) {
+		log.Printf("annotation of dependent secret %s changed", secretKey)
+		return false, nil
+	}
+
+	return true, r.doClearSecret(targetSecret)
+}
+
+func (r *secretReplicator) doClearSecret(secret *v1.Secret) error {
+	if _, ok := secret.Annotations[ReplicatedFromVersionAnnotation]; !ok {
+		log.Printf("secret %s/%s is already up-to-date", secret.Namespace, secret.Name)
+		return nil
+	}
+
+	secretCopy := secret.DeepCopy()
+	secretCopy.Data = nil
+
+	log.Printf("clearing secret %s/%s", secret.Namespace, secret.Name)
+
+	secretCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	delete(secretCopy.Annotations, ReplicatedFromVersionAnnotation)
+
+	s, err := r.client.CoreV1().Secrets(secret.Namespace).Update(secretCopy)
+	if err != nil {
+		log.Printf("error while clearing secret %s/%s", secret.Namespace, secret.Name)
+		return err
+	}
+
+	r.store.Update(s)
+	return nil
+}
+
+func (r *secretReplicator) deleteSecret(secretKey string, sourceSecret *v1.Secret) (bool, error) {
+	object, exists, err := r.store.GetByKey(secretKey)
+
+	if err != nil {
+		log.Printf("could not get secret %s: %s", secretKey, err)
+		return false, err
+
+	} else if !exists {
+		log.Printf("could not get secret %s: does not exist", secretKey)
+		return false, nil
+	// make sure replication is allowed
+	}
+
+	secret := object.(*v1.Secret)
+
+	if ok, err := r.canReplicateTo(&sourceSecret.ObjectMeta, &secret.ObjectMeta); !ok {
+		log.Printf("secret %s was not created by replication: %s", secretKey, err)
+		return false, nil
+	// delete the secret
+	} else {
+		return true, r.doDeleteSecret(secret)
+	}
+}
+
+func (r *secretReplicator) doDeleteSecret(secret *v1.Secret) error {
+	log.Printf("deleting secret %s/%s", secret.Namespace, secret.Name)
+
+	options := metav1.DeleteOptions{
+		Preconditions: &metav1.Preconditions{
+			ResourceVersion: &secret.ResourceVersion,
+		},
+	}
+
+	err := r.client.CoreV1().Secrets(secret.Namespace).Delete(secret.Name, &options)
+	if err != nil {
+		log.Printf("error while deleting secret %s/%s: %s", secret.Namespace, secret.Name, err)
+		return err
+	}
+
+	r.store.Delete(secret)
+	return nil
 }
