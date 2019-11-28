@@ -34,7 +34,17 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 	store, controller := cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
-				return client.CoreV1().Secrets("").List(lo)
+				list, err := client.CoreV1().Secrets("").List(lo)
+				if err != nil {
+					return list, err
+				}
+				// populate the store already, to avoid believing some items are deleted
+				copy := make([]interface{}, len(list.Items))
+				for index := range list.Items {
+					copy[index] = &list.Items[index]
+				}
+				repl.store.Replace(copy, "init")
+				return list, err
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.CoreV1().Secrets("").Watch(lo)
@@ -65,6 +75,7 @@ func (r *secretReplicator) Run() {
 }
 
 func (r *secretReplicator) SecretAdded(obj interface{}) {
+
 	secret := obj.(*v1.Secret)
 	secretKey := fmt.Sprintf("%s/%s", secret.Namespace, secret.Name)
 
@@ -82,7 +93,7 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 		r.updateDependents(secret, replicas)
 	}
 
-	if val, ok := secret.Annotations[ReplicatedFromAnnotation]; ok {
+	if val, ok := secret.Annotations[ReplicatedByAnnotation]; ok {
 		var sourceSecret *v1.Secret = nil
 
 		sourceObject, exists, err := r.store.GetByKey(val)
@@ -149,16 +160,13 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.Secret) error {
 	// make sure replication is allowed
 	if ok, err := r.isReplicationPermitted(&secret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
-		log.Printf("replication of secret %s/%s is not permitted: %s", sourceSecret.Namespace, sourceSecret.Name, err)
+		log.Printf("replication of secret %s/%s is cancelled: %s", secret.Namespace, secret.Name, err)
 		return err
 	}
 
-	targetVersion, ok := secret.Annotations[ReplicatedFromVersionAnnotation]
-	sourceVersion := sourceSecret.ResourceVersion
-
-	if ok && targetVersion == sourceVersion {
-		log.Printf("secret %s/%s is already up-to-date", secret.Namespace, secret.Name)
-		return nil
+	if ok, err := r.needsUpdate(&secret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
+		log.Printf("replication of secret %s/%s is skipped: %s", secret.Namespace, secret.Name, err)
+		return err
 	}
 
 	secretCopy := secret.DeepCopy()
@@ -196,7 +204,7 @@ func (r *secretReplicator) installSecret(target string, targetSecret *v1.Secret,
 
 		if len(targetSplit) != 2 {
 			err := fmt.Errorf("illformed annotation %s: expected namespace/name, got %s",
-				ReplicatedFromAnnotation, target)
+				ReplicatedByAnnotation, target)
 			log.Printf("%s", err)
 			return err
 		}
@@ -213,13 +221,15 @@ func (r *secretReplicator) installSecret(target string, targetSecret *v1.Secret,
 	}
 
 	if targetSecret != nil {
-		if verion, ok := targetSecret.Annotations[ReplicatedFromVersionAnnotation]; ok && verion == sourceSecret.ResourceVersion {
-			log.Printf("secret %s/%s is already up-to-date", targetSecret.Namespace, targetSecret.Name)
-			return nil
-		// make sure replication is allowed
-		} else if ok, err := r.canReplicateTo(&sourceSecret.ObjectMeta, &targetSecret.ObjectMeta); !ok {
-			log.Printf("secret %s/%s cannot be replicated to %s/%s: %s",
-				sourceSecret.Namespace, sourceSecret.Name, targetSecret.Namespace, targetSecret.Name, err)
+		if ok, err := r.canReplicateTo(&sourceSecret.ObjectMeta, &targetSecret.ObjectMeta); !ok {
+			log.Printf("replication of secret %s/%s is cancelled: %s",
+				sourceSecret.Namespace, sourceSecret.Name, err)
+			return err
+		}
+
+		if ok, err := r.needsUpdate(&targetSecret.ObjectMeta, &sourceSecret.ObjectMeta); !ok {
+			log.Printf("replication of secret %s/%s is skipped: %s",
+				sourceSecret.Namespace, sourceSecret.Name, err)
 			return err
 		}
 	}
@@ -249,7 +259,7 @@ func (r *secretReplicator) installSecret(target string, targetSecret *v1.Secret,
 	log.Printf("installing secret %s/%s", secretCopy.Namespace, secretCopy.Name)
 
 	secretCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
-	secretCopy.Annotations[ReplicatedFromAnnotation] = fmt.Sprintf("%s/%s",
+	secretCopy.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
 		sourceSecret.Namespace, sourceSecret.Name)
 	secretCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
 
@@ -415,14 +425,14 @@ func (r *secretReplicator) deleteSecret(secretKey string, sourceSecret *v1.Secre
 	} else if !exists {
 		log.Printf("could not get secret %s: does not exist", secretKey)
 		return false, nil
-	// make sure replication is allowed
 	}
 
 	secret := object.(*v1.Secret)
 
+	// make sure replication is allowed
 	if ok, err := r.canReplicateTo(&sourceSecret.ObjectMeta, &secret.ObjectMeta); !ok {
-		log.Printf("secret %s was not created by replication: %s", secretKey, err)
-		return false, nil
+		log.Printf("deletion of secret %s is cancelled: %s", secretKey, err)
+		return false, err
 	// delete the secret
 	} else {
 		return true, r.doDeleteSecret(secret)
