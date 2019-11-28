@@ -28,8 +28,9 @@ type Replicator interface {
 }
 
 // Checks if replication is allowed in annotations of the source object
-// Returns true if replication is allowed. If replication is not allowed returns false with
-// error message
+// It means that replication-allowes and replications-allowed-namespaces are correct
+// Returns true if replication is allowed.
+// If replication is not allowed returns false with error message
 func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
 	if r.allowAll {
 		return true, nil
@@ -76,39 +77,55 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 	return allowed, err
 }
 
-func (r *replicatorProps) isReplicatedFrom(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
-	if ok := annotationRefersTo(object, ReplicateFromAnnotation, sourceObject); !ok {
-		return false, fmt.Errorf("annotation of dependent %s/%s changed", object.Namespace, object.Name)
+// Checks that update is needed in annotations of the target and source objects
+// Returns true if update is needed
+// If update is not needed returns false with error message
+func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
+	// target was "replicated" from a delete source, or never replicated
+	if targetVersion, ok := object.Annotations[ReplicatedFromVersionAnnotation]; !ok {
+		return true, nil
+	// target and source share the same version
+	} else if ok && targetVersion == sourceObject.ResourceVersion {
+		return false, fmt.Errorf("target %s/%s is already up-to-date", object.Namespace, object.Name)
 	}
+	// no once annotation, nothing to check
+	if annotationOnce, ok := sourceObject.Annotations[ReplicateOnceAnnotation]; !ok {
+	// once annotation is not a boolean
+	} else if once, err := strconv.ParseBool(annotationOnce); err != nil {
+		return false, fmt.Errorf("source %s/%s has illformed annotation %s: %s",
+			sourceObject.Namespace, sourceObject.Name, ReplicateOnceAnnotation, err)
+	// once annotation is present, already replicated
+	} else if once {
+		return false, fmt.Errorf("source %s/%s should only be replicated once",
+			sourceObject.Namespace, sourceObject.Name)
+	}
+	// no once annotation, nothing to check
+	if annotationOnce, ok := object.Annotations[ReplicateOnceAnnotation]; !ok {
+	// once annotation is not a boolean
+	} else if once, err := strconv.ParseBool(annotationOnce); err != nil {
+		return false, fmt.Errorf("target %s/%s has illformed annotation %s: %s",
+			object.Namespace, object.Name, ReplicateOnceAnnotation, err)
+	// once annotation is present, already replicated
+	} else if once {
+		return false, fmt.Errorf("target %s/%s should only be replicated once",
+			object.Namespace, object.Name)
+	}
+
+	// TODO compare once versions
 
 	return true, nil
 }
 
+// Checks that replication from the source object to the target objects is allowed
+// It means that the target object was created using replication of the same source
+// Returns true if replication is allowed
+// If replication is not allowed returns false with error message
 func (r *replicatorProps) canReplicateTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
-
-	// check for once annotation
-	if annotationOnce, ok := object.Annotations[ReplicateOnceAnnotation]; ok {
-		if once, err := strconv.ParseBool(annotationOnce); err != nil {
-			return false, fmt.Errorf("source %s/%s has illformed annotation %s: %s",
-				object.Namespace, object.Name, ReplicateOnceAnnotation, err)
-		} else if once && targetObject != nil {
-			return false, fmt.Errorf("target %s/%s already exists, replication skipped",
-				object.Namespace, object.Name)
-		}
-	}
-
-	if object == nil {
-		return true, nil
-	}
-
-	return r.isReplicatedTo(object, targetObject)
-}
-
-func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
 	// make sure that the target object was created from the source
-	if annotationFrom, ok := targetObject.Annotations[ReplicatedFromAnnotation]; !ok {
+	if annotationFrom, ok := targetObject.Annotations[ReplicatedByAnnotation]; !ok {
 		return false, fmt.Errorf("target %s/%s was not replicated",
 			targetObject.Namespace, targetObject.Name)
+
 	} else if annotationFrom != fmt.Sprintf("%s/%s", object.Namespace, object.Name) {
 		return false, fmt.Errorf("target %s/%s was not replicated from %s/%s",
 			targetObject.Namespace, targetObject.Name, object.Namespace, object.Name)
@@ -117,6 +134,7 @@ func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject
 	return true, nil
 }
 
+// Returns an annotation as "namespace/name" format
 func resolveAnnotation(object *metav1.ObjectMeta, annotation string) (string, bool) {
 	if val, ok := object.Annotations[annotation]; !ok {
 		return "", false
@@ -127,6 +145,7 @@ func resolveAnnotation(object *metav1.ObjectMeta, annotation string) (string, bo
 	}
 }
 
+// Returns true if the annotation from the object references the other object
 func annotationRefersTo(object *metav1.ObjectMeta, annotation string, reference *metav1.ObjectMeta) bool {
 	if val, ok := object.Annotations[annotation]; !ok {
 		return false

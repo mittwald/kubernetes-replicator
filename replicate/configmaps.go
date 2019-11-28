@@ -82,7 +82,7 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 		r.updateDependents(configMap, replicas)
 	}
 
-	if val, ok := configMap.Annotations[ReplicatedFromAnnotation]; ok {
+	if val, ok := configMap.Annotations[ReplicatedByAnnotation]; ok {
 		var sourceConfigMap *v1.ConfigMap = nil
 
 		sourceObject, exists, err := r.store.GetByKey(val)
@@ -205,7 +205,7 @@ func (r *configMapReplicator) installConfigMap(target string, targetConfigMap *v
 
 		if len(targetSplit) != 2 {
 			err := fmt.Errorf("illformed annotation %s: expected namespace/name, got %s",
-				ReplicatedFromAnnotation, target)
+				ReplicatedByAnnotation, target)
 			log.Printf("%s", err)
 			return err
 		}
@@ -264,7 +264,7 @@ func (r *configMapReplicator) installConfigMap(target string, targetConfigMap *v
 	log.Printf("installing config map %s/%s", configMapCopy.Namespace, configMapCopy.Name)
 
 	configMapCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
-	configMapCopy.Annotations[ReplicatedFromAnnotation] = fmt.Sprintf("%s/%s",
+	configMapCopy.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
 		sourceConfigMap.Namespace, sourceConfigMap.Name)
 	configMapCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceConfigMap.ResourceVersion
 
