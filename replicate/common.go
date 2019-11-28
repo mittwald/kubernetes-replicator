@@ -2,6 +2,7 @@ package replicate
 
 import (
 	"fmt"
+	semver "github.com/Masterminds/semver/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -11,6 +12,8 @@ import (
 )
 
 type replicatorProps struct {
+	Name       string
+
 	client     kubernetes.Interface
 	store      cache.Store
 	controller cache.Controller
@@ -88,16 +91,17 @@ func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *m
 	} else if ok && targetVersion == sourceObject.ResourceVersion {
 		return false, fmt.Errorf("target %s/%s is already up-to-date", object.Namespace, object.Name)
 	}
+
+	hasOnce := false
 	// no once annotation, nothing to check
 	if annotationOnce, ok := sourceObject.Annotations[ReplicateOnceAnnotation]; !ok {
 	// once annotation is not a boolean
 	} else if once, err := strconv.ParseBool(annotationOnce); err != nil {
 		return false, fmt.Errorf("source %s/%s has illformed annotation %s: %s",
 			sourceObject.Namespace, sourceObject.Name, ReplicateOnceAnnotation, err)
-	// once annotation is present, already replicated
+	// once annotation is present
 	} else if once {
-		return false, fmt.Errorf("source %s/%s should only be replicated once",
-			sourceObject.Namespace, sourceObject.Name)
+		hasOnce = true
 	}
 	// no once annotation, nothing to check
 	if annotationOnce, ok := object.Annotations[ReplicateOnceAnnotation]; !ok {
@@ -105,13 +109,40 @@ func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *m
 	} else if once, err := strconv.ParseBool(annotationOnce); err != nil {
 		return false, fmt.Errorf("target %s/%s has illformed annotation %s: %s",
 			object.Namespace, object.Name, ReplicateOnceAnnotation, err)
-	// once annotation is present, already replicated
+	// once annotation is present
 	} else if once {
-		return false, fmt.Errorf("target %s/%s should only be replicated once",
-			object.Namespace, object.Name)
+		hasOnce = true
 	}
 
-	// TODO compare once versions
+	if !hasOnce {
+	// no once version annotation in the source, only replicate once
+	} else if annotationVersion, ok := sourceObject.Annotations[ReplicateOnceVersionAnnotation]; !ok {
+	// once version annotation is not a valid version
+	} else if sourceVersion, err := semver.NewVersion(annotationVersion); err != nil {
+		return false, fmt.Errorf("source %s/%s has illformed annotation %s: %s",
+			sourceObject.Namespace, sourceObject.Name, ReplicateOnceVersionAnnotation, err)
+	// the source has a once version annotation but it is "0.0.0" anyway
+	} else if version0, _ := semver.NewVersion("0"); sourceVersion.Equal(version0) {
+	// no once version annotation in the target, should update
+	} else if annotationVersion, ok := object.Annotations[ReplicateOnceVersionAnnotation]; !ok {
+		hasOnce = false
+	// once version annotation is not a valid version
+	} else if targetVersion, err := semver.NewVersion(annotationVersion); err != nil {
+		return false, fmt.Errorf("target %s/%s has illformed annotation %s: %s",
+			object.Namespace, object.Name, ReplicateOnceVersionAnnotation, err)
+	// source version is greatwe than source version, should update
+	} else if sourceVersion.GreaterThan(targetVersion) {
+		hasOnce = false
+	// source version is not greater than target version
+	} else {
+		return false, fmt.Errorf("target %s/%s is already replicated once at version %s",
+			object.Namespace, object.Name, sourceVersion)
+	}
+
+	if hasOnce {
+		return false, fmt.Errorf("target %s/%s is already replicated once",
+			object.Namespace, object.Name)
+	}
 
 	return true, nil
 }

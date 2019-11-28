@@ -3,6 +3,7 @@ module github.com/mittwald/kubernetes-replicator
 go 1.12
 
 require (
+	github.com/Masterminds/semver/v3 v3.0.2
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/protobuf v1.3.2 // indirect

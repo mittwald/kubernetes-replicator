@@ -19,13 +19,13 @@ var SecretActions *secretActions = &secretActions{}
 func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := objectReplicator{
 		replicatorProps: replicatorProps{
+			Name:          "secret",
 			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
-			targetMap: make(map[string]string),
+			targetMap:     make(map[string]string),
 		},
 		replicatorActions: SecretActions,
-		Name: "secret",
 	}
 
 	store, controller := cache.NewInformer(
@@ -87,6 +87,11 @@ func (*secretActions) update(r *replicatorProps, object interface{}, sourceObjec
 
 	secret.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	secret.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
+	if val, ok := sourceSecret.Annotations[ReplicateOnceVersionAnnotation]; ok {
+		secret.Annotations[ReplicateOnceVersionAnnotation] = val
+	} else {
+		delete(secret.Annotations, ReplicateOnceVersionAnnotation)
+	}
 
 	s, err := r.client.CoreV1().Secrets(secret.Namespace).Update(secret)
 	if err != nil {
@@ -106,6 +111,7 @@ func (*secretActions) clear(r *replicatorProps, object interface{}) error {
 
 	secret.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	delete(secret.Annotations, ReplicatedFromVersionAnnotation)
+	delete(secret.Annotations, ReplicateOnceVersionAnnotation)
 
 	s, err := r.client.CoreV1().Secrets(secret.Namespace).Update(secret)
 	if err != nil {
@@ -144,6 +150,9 @@ func (*secretActions) install(r *replicatorProps, meta *metav1.ObjectMeta, sourc
 	secret.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
 		sourceSecret.Namespace, sourceSecret.Name)
 	secret.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
+	if val, ok := sourceSecret.Annotations[ReplicateOnceVersionAnnotation]; ok {
+		secret.Annotations[ReplicateOnceVersionAnnotation] = val
+	}
 
 	var s *v1.Secret
 	var err error

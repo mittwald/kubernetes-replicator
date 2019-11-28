@@ -21,7 +21,6 @@ type replicatorActions interface {
 type objectReplicator struct {
 	replicatorProps
 	replicatorActions
-	Name string
 }
 
 func (r *objectReplicator) Synced() bool {
@@ -166,7 +165,7 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 			return err
 		}
 
-		if ok, err := r.needsUpdate(targetMeta, targetMeta); !ok {
+		if ok, err := r.needsUpdate(targetMeta, sourceMeta); !ok {
 			log.Printf("replication of %s %s/%s is skipped: %s",
 				r.Name, sourceMeta.Namespace, sourceMeta.Name, err)
 			return err
