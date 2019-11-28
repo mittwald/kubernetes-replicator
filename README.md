@@ -28,7 +28,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 ### 1. Create the source secret
 
 If a secret or configMap needs to be replicated to other namespaces, annotations should be added in that object permitting replication.
- 
+
   - Add `replicator.v1.mittwald.de/replication-allowed` annotation with value `true` indicating that the object can be replicated.
   - Add `replicator.v1.mittwald.de/replication-allowed-namespaces` annotation. Value of this annotation should contain a comma separated list of permitted namespaces or regular expressions. For example `namespace-1,my-ns-2,app-ns-[0-9]*`: in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` as well as any namespace that matches the regular expression `app-ns-[0-9]*`.
 
@@ -57,4 +57,4 @@ metadata:
 data: {}
 ```
 
-The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in sync.   
+The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in sync.

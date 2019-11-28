@@ -19,13 +19,13 @@ var ConfigMapActions *configMapActions = &configMapActions{}
 func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := objectReplicator{
 		replicatorProps: replicatorProps{
+			Name:          "config map",
 			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
-			targetMap: make(map[string]string),
+			targetMap:     make(map[string]string),
 		},
 		replicatorActions: ConfigMapActions,
-		Name: "config map",
 	}
 
 	store, controller := cache.NewInformer(
@@ -96,6 +96,11 @@ func (*configMapActions) update(r *replicatorProps, object interface{}, sourceOb
 
 	configMap.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	configMap.Annotations[ReplicatedFromVersionAnnotation] = sourceConfigMap.ResourceVersion
+	if val, ok := sourceConfigMap.Annotations[ReplicateOnceVersionAnnotation]; ok {
+		configMap.Annotations[ReplicateOnceVersionAnnotation] = val
+	} else {
+		delete(configMap.Annotations, ReplicateOnceVersionAnnotation)
+	}
 
 	s, err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Update(configMap)
 	if err != nil {
@@ -116,6 +121,7 @@ func (*configMapActions) clear(r *replicatorProps, object interface{}) error {
 
 	configMap.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	delete(configMap.Annotations, ReplicatedFromVersionAnnotation)
+	delete(configMap.Annotations, ReplicateOnceVersionAnnotation)
 
 	s, err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Update(configMap)
 	if err != nil {
@@ -160,6 +166,9 @@ func (*configMapActions) install(r *replicatorProps, meta *metav1.ObjectMeta, so
 	configMap.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
 		sourceConfigMap.Namespace, sourceConfigMap.Name)
 	configMap.Annotations[ReplicatedFromVersionAnnotation] = sourceConfigMap.ResourceVersion
+	if val, ok := sourceConfigMap.Annotations[ReplicateOnceVersionAnnotation]; ok {
+		configMap.Annotations[ReplicateOnceVersionAnnotation] = val
+	}
 
 	var s *v1.ConfigMap
 	var err error
