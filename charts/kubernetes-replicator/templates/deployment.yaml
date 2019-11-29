@@ -21,7 +21,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command:
         - --prefix
-        - {{ template "kubernetes-replicator.prefix" }}
+        - {{ template "kubernetes-replicator.prefix" . }}
         ports:
           - name: health
             containerPort: 9102

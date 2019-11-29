@@ -33,10 +33,10 @@ Create chart name and version as used by the chart label.
 
 {{- define "kubernetes-replicator.prefix" -}}
   {{- $test := and (eq .Release.Name "testRelease") (eq .Release.Namespace "default") -}}
-  {{- if .Values.spanner.prefix -}}
-  	{{ .Values.spanner.prefix | quote }}
+  {{- if .Values.prefix -}}
+  	{{ .Values.prefix | quote }}
   {{- else if hasPrefix .Values.previewNSPrefix .Release.Namespace -}}
-    "{{ .Release.Namespace | replace .Values.spanner.previewNSPrefix "" | trimPrefix "-" }}.preview.kubernetes-replicator.olli.com/""
+    "{{ .Release.Namespace | replace .Values.previewNSPrefix "" | trimPrefix "-" }}.preview.kubernetes-replicator.olli.com/""
   {{- else if eq .Release.Namespace "jx" -}}
   	"v1.kubernetes-replicator.olli.com/"
   {{- else if $test -}}
