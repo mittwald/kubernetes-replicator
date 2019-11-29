@@ -19,7 +19,7 @@ install:
 build:
 	"$(GOCMD)" build ${GOFLAGS} ${LDFLAGS} -o "${BINARY}"
 
-builder-image: build
+builder-image:
 	@docker build -t "${DOCKER_IMAGE}" .
 
 # test:
