@@ -135,6 +135,7 @@ pipelineConfig:
             - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:${inputs.params.version}
             - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:stable
             - --cache-repo=asia.gcr.io/olli-iviet/cache
+            - --skip-tls-verify-registry=asia.gcr.io
             command: /kaniko/executor
             dir: /workspace/source
             image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
