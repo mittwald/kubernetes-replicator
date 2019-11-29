@@ -60,7 +60,7 @@ pipelineConfig:
             command: /kaniko/executor
             dir: /workspace/source
             image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
-            name: container-build
+            name: build-container-build
         - name: postbuild
           agent:
             image: go
@@ -141,7 +141,7 @@ pipelineConfig:
             command: /kaniko/executor
             dir: /workspace/source
             image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
-            name: container-build
+            name: build-container-build
           - command: jx step post build --image $DOCKER_REGISTRY/$ORG/$APP_NAME:${VERSION}
             dir: /workspace/source
             name: post-build
