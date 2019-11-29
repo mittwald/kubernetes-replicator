@@ -9,6 +9,10 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
