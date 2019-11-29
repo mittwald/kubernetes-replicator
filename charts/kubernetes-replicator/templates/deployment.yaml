@@ -24,6 +24,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command:
+        - /kubernetes-replicator
         - --prefix
         - {{ template "kubernetes-replicator.prefix" . }}
         ports:
