@@ -17,11 +17,14 @@ var f flags
 
 func init() {
 	var err error
+	flag.StringVar(&f.AnnotationsPrefix, "prefix", "v1.kubernetes-replicator.olli.com/", "prefix for all annotations")
 	flag.StringVar(&f.Kubeconfig, "kubeconfig", "", "path to Kubernetes config file")
 	flag.StringVar(&f.ResyncPeriodS, "resync-period", "30m", "resynchronization period")
 	flag.StringVar(&f.StatusAddr, "status-addr", ":9102", "listen address for status and monitoring server")
 	flag.BoolVar(&f.AllowAll, "allow-all", false, "allow replication of all secrets (CAUTION: only use when you know what you're doing)")
 	flag.Parse()
+
+	replicate.PrefixAnnotations(f.AnnotationsPrefix)
 
 	f.ResyncPeriod, err = time.ParseDuration(f.ResyncPeriodS)
 	if err != nil {
