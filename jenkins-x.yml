@@ -1,7 +1,8 @@
-buildPack: none
+buildPack: go
 pipelineConfig:
   agent:
-    image: builder-go
+    dir: /home/jenkins/go/src/REPLACE_ME_GIT_PROVIDER/REPLACE_ME_ORG/REPLACE_ME_APP_NAME
+    image: go
   pipelines:
     pullRequest:
       pipeline:
@@ -46,6 +47,8 @@ pipelineConfig:
               name: volume-0
         stages:
         - name: build
+          agent:
+            image: go
           steps:
           - args:
             - --cache=true
@@ -60,6 +63,8 @@ pipelineConfig:
             image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
             name: container-build
         - name: postbuild
+          agent:
+            image: go
           steps:
           - command: jx step post build --image $DOCKER_REGISTRY/$ORG/$APP_NAME:$PREVIEW_VERSION
             dir: /workspace/source
@@ -68,6 +73,8 @@ pipelineConfig:
             dir: /workspace/source/charts/preview
             name: make-preview
         - name: promote
+          agent:
+            image: go
           steps:
           - command: jx preview --app $APP_NAME --dir ../..
             dir: /workspace/source/charts/preview
@@ -114,6 +121,8 @@ pipelineConfig:
               name: volume-0
         stages:
         - name: build
+          agent:
+            image: go
           steps:
           - command: jx step git credentials
             dir: /workspace/source
@@ -134,6 +143,8 @@ pipelineConfig:
             dir: /workspace/source
             name: post-build
         - name: promote
+          agent:
+            image: go
           steps:
           - command: jx step changelog --batch-mode --version v${VERSION}
             dir: /workspace/source/charts/kubernetes-replicator
@@ -146,7 +157,9 @@ pipelineConfig:
             name: jx-promote
       setVersion:
         steps:
-        - steps:
+        - agent:
+            image: go
+          steps:
           - comment: so we can retrieve the version in later steps
             name: next-version
             sh: echo \$(jx-release-version) > VERSION
