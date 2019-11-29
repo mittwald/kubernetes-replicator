@@ -1,7 +1,6 @@
 buildPack: go
 pipelineConfig:
   agent:
-    dir: /home/jenkins/go/src/REPLACE_ME_GIT_PROVIDER/REPLACE_ME_ORG/REPLACE_ME_APP_NAME
     image: go
   pipelines:
     pullRequest:
@@ -31,11 +30,11 @@ pipelineConfig:
             name: ""
             resources:
               limits:
-                cpu: "2"
-                memory: 2Gi
+                cpu: "1"
+                memory: 1448Mi
               requests:
                 cpu: 400m
-                memory: 512Mi
+                memory: 600Mi
             securityContext:
               privileged: true
             volumeMounts:
@@ -107,9 +106,12 @@ pipelineConfig:
               value: /home/jenkins
             name: ""
             resources:
+              limits:
+                cpu: "1"
+                memory: 1448Mi
               requests:
                 cpu: 400m
-                memory: 512Mi
+                memory: 600Mi
             securityContext:
               privileged: true
             volumeMounts:
@@ -133,7 +135,7 @@ pipelineConfig:
             - --context=/workspace/source
             - --dockerfile=/workspace/source/Dockerfile
             - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:${inputs.params.version}
-            - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:stable
+            # - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:stable
             - --cache-repo=asia.gcr.io/olli-iviet/cache
             - --skip-tls-verify-registry=asia.gcr.io
             command: /kaniko/executor
@@ -156,13 +158,3 @@ pipelineConfig:
           - command: jx promote -b --env dev --timeout 1h --version ${VERSION}
             dir: /workspace/source/charts/kubernetes-replicator
             name: jx-promote
-      setVersion:
-        steps:
-        - agent:
-            image: go
-          steps:
-          - comment: so we can retrieve the version in later steps
-            name: next-version
-            sh: echo \$(jx-release-version) > VERSION
-          - name: tag-version
-            sh: jx step tag --version \$(cat VERSION)
