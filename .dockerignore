@@ -4,8 +4,6 @@ dist/
 test*
 kubernetes-replicator
 
-Dockerfile
-
 LICENSE
 *.txt
 *.md
