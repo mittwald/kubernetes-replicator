@@ -38,8 +38,8 @@ If a secret or configMap needs to be replicated to other namespaces, annotations
       annotations:
         v1.kubernetes-replicator.olli.com/replication-allowed: "true"
         v1.kubernetes-replicator.olli.com/replication-allowed-namespaces: "my-ns-1,namespace-[0-9]*"
-        # v1.kubernetes-replicator.olli.com/replication-once: "true"
-        # v1.kubernetes-replicator.olli.com/replication-once-version: "0.0.1"
+        # v1.kubernetes-replicator.olli.com/replicate-once: "true"
+        # v1.kubernetes-replicator.olli.com/replicate-once-version: "0.0.1"
     data:
       key1: <value>
     ```
@@ -57,7 +57,7 @@ To make the secret available in other namespaces, create an empty secret to be r
     metadata:
       annotations:
         v1.kubernetes-replicator.olli.com/replicate-from: default/some-secret
-        # v1.kubernetes-replicator.olli.com/replication-once: "true"
+        # v1.kubernetes-replicator.olli.com/replicate-once: "true"
     data: {}
     ```
 
@@ -68,8 +68,8 @@ The replicator will then copy the `data` attribute of the referenced object into
 If a secret needs to have a copy, annotation should be added in that object to trigger replication.
 
   - Add `v1.kubernetes-replicator.olli.com/replicate-to` to any Kubernetes secret or config map object. The value of that annotation should contain the the name of another secret or config map (using `<name>` or `<namespace>/<name>` notation).
-  - You can add `v1.kubernetes-replicator.olli.com/replication-once` annotation to ensure that the secret will only be replicated once, no matter how many times it is updated.
-  - You can add `v1.kubernetes-replicator.olli.com/replication-once-version` annotation to still replicate the secret when the once version is updated.
+  - You can add `v1.kubernetes-replicator.olli.com/replicate-once` annotation to ensure that the secret will only be replicated once, no matter how many times it is updated.
+  - You can add `v1.kubernetes-replicator.olli.com/replicate-once-version` annotation to still replicate the secret when the once version is updated.
 
     ```yaml
     apiVersion: v1
@@ -77,8 +77,8 @@ If a secret needs to have a copy, annotation should be added in that object to t
     metadata:
       annotations:
         v1.kubernetes-replicator.olli.com/replicate-to: default/some-other-secret
-        v1.kubernetes-replicator.olli.com/replication-once: "true"
-        # v1.kubernetes-replicator.olli.com/replication-once-version: "0.0.1"
+        v1.kubernetes-replicator.olli.com/replicate-once: "true"
+        # v1.kubernetes-replicator.olli.com/replicate-once-version: "0.0.1"
     data:
       key1: <value>
     ```
