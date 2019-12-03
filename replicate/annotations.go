@@ -5,7 +5,7 @@ var (
 	ReplicateFromAnnotation         = "replicate-from"
 	ReplicateToAnnotation           = "replicate-to"
 	ReplicateOnceAnnotation         = "replicate-once"
-	ReplicateOnceVersionAnnotation  = "rreplicate-once-version"
+	ReplicateOnceVersionAnnotation  = "replicate-once-version"
 	ReplicatedAtAnnotation          = "replicated-at"
 	ReplicatedByAnnotation          = "replicated-by"
 	ReplicatedFromVersionAnnotation = "replicated-from-version"
