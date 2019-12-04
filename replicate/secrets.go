@@ -23,12 +23,12 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 			allowAll:      allowAll,
 			client:        client,
 			dependencyMap: make(map[string][]string),
-			targetMap:     make(map[string]string),
+			targetMap:     make(map[string][]string),
 		},
 		replicatorActions: SecretActions,
 	}
 
-	store, controller := cache.NewInformer(
+	objectStore, objectController := cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
 				list, err := client.CoreV1().Secrets("").List(lo)
@@ -40,7 +40,7 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 				for index := range list.Items {
 					copy[index] = &list.Items[index]
 				}
-				repl.store.Replace(copy, "init")
+				repl.objectStore.Replace(copy, "init")
 				return list, err
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
@@ -56,8 +56,8 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 		},
 	)
 
-	repl.store = store
-	repl.controller = controller
+	repl.objectStore = objectStore
+	repl.objectController = objectController
 
 	return &repl
 }
@@ -99,7 +99,7 @@ func (*secretActions) update(r *replicatorProps, object interface{}, sourceObjec
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (*secretActions) clear(r *replicatorProps, object interface{}) error {
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -167,7 +167,7 @@ func (*secretActions) install(r *replicatorProps, meta *metav1.ObjectMeta, sourc
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -187,6 +187,6 @@ func (*secretActions) delete(r *replicatorProps, object interface{}) error {
 		return err
 	}
 
-	r.store.Delete(secret)
+	r.objectStore.Delete(secret)
 	return nil
 }

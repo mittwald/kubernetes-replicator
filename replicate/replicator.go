@@ -24,12 +24,12 @@ type objectReplicator struct {
 }
 
 func (r *objectReplicator) Synced() bool {
-	return r.controller.HasSynced()
+	return r.objectController.HasSynced()
 }
 
 func (r *objectReplicator) Run() {
-	log.Printf("running %s controller", r.Name)
-	r.controller.Run(wait.NeverStop)
+	log.Printf("running %s object controller", r.Name)
+	r.objectController.Run(wait.NeverStop)
 }
 
 func (r *objectReplicator) ObjectAdded(object interface{}) {
@@ -37,13 +37,31 @@ func (r *objectReplicator) ObjectAdded(object interface{}) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
 
-	if val, ok := r.targetMap[key]; ok {
-		if annotation, ok := resolveAnnotation(meta, ReplicateToAnnotation); !ok || val != annotation {
-			log.Printf("annotation of source %s %s changed", r.Name, key)
+	targets, targetPatterns, err := getReplicationTargets(meta)
+	if err != nil {
+		log.Printf("could not parse %s %s: %s", r.Name, key, err)
+		return
+	}
 
-			r.deleteObject(val, object)
-			delete(r.targetMap, key)
+	if oldTargets, ok := r.targetMap[key]; ok {
+		log.Printf("source %s %s changed", r.Name, key)
+Targets:
+		for _, target := range oldTargets {
+			for _, t := range targets {
+				if t == target {
+					continue Targets
+				}
+			}
+			for _, p := targetPatterns {
+				if p.MatchString(target) {
+					continue Targets
+				}
+			}
+			log.Printf("annotation of source %s %s changed: deleting target %s",
+				r.Name, key, target)
+			r.deleteObject(target, object)
 		}
+		delete(r.targetMap, key)
 	}
 
 	if replicas, ok := r.dependencyMap[key]; ok {
@@ -52,23 +70,25 @@ func (r *objectReplicator) ObjectAdded(object interface{}) {
 	}
 
 	if val, ok := meta.Annotations[ReplicatedByAnnotation]; ok {
-		var sourceMeta *metav1.ObjectMeta = nil
+		log.Printf("%s %s is replicated by %s", r.Name, key, val)
+		sourceObject, exists, err := r.objectStore.GetByKey(val)
+		sourceMeta := r.getMeta(sourceObject)
 
-		sourceObject, exists, err := r.store.GetByKey(val)
 		if err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, val, err)
 			return
 
 		} else if !exists {
-			log.Printf("source %s %s deleted", r.Name, val)
+			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
+			sourceMeta = nil
 
-		} else {
-			sourceMeta = r.getMeta(sourceObject)
+		} else if ok, err := r.isReplicatedTo(); err != nil {
+			log.Printf("could not parse %s %s: %s", r.Name, val, err)
+			return
 
-			if !annotationRefersTo(sourceMeta, ReplicateToAnnotation, meta) {
-				log.Printf("annotation of source %s %s changed", r.Name, val)
-				sourceMeta = nil
-			}
+		} else if ! ok {
+			log.Printf("source %s %s is not replicated to %s: deleting target", r.Name, val, key)
+			sourceMeta = nil
 		}
 
 		if sourceMeta == nil {
@@ -89,12 +109,12 @@ func (r *objectReplicator) ObjectAdded(object interface{}) {
 		}
 		r.dependencyMap[val] = append(r.dependencyMap[val], key)
 
-		if sourceObject, exists, err := r.store.GetByKey(val); err != nil {
+		if sourceObject, exists, err := r.objectStore.GetByKey(val); err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, val, err)
 			return
 
 		} else if !exists {
-			log.Printf("source %s %s deleted", r.Name, val)
+			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
 			r.doClearObject(object)
 			return
 
@@ -104,12 +124,30 @@ func (r *objectReplicator) ObjectAdded(object interface{}) {
 		}
 	}
 
-	if val, ok := resolveAnnotation(meta, ReplicateToAnnotation); ok {
-		log.Printf("%s %s is replicated to %s", r.Name, key, val)
+	if len(targets) > 0 || len(targetPatterns) > 0 {
 
-		r.targetMap[key] = val
+		if len(targetPatterns) > 0 {
+			namespaces := r.namespaceStore.ListKeys()
+			seen := map[string]bool{}
+			for _, t := range(targets) {
+				seen[t] = true
+			}
 
-		r.installObject(val, nil, object)
+			for _, p := range targetPatterns {
+				for _, t := p.Targets(namespaces) {
+					if !seen[t] {
+						seen[t] = true
+						targets = append(targets, t)
+					}
+				}
+			}
+		}
+
+		r.targetMap[key] = targets
+		for _, t := range(targets) {
+			log.Printf("%s %s is replicated to %s", r.Name, key, t)
+			r.installObject(t, nil, object)
+		}
 		return
 	}
 }
@@ -146,7 +184,7 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 			return err
 		}
 
-		if targetObject, exists, err := r.store.GetByKey(target); err != nil {
+		if targetObject, exists, err := r.objectStore.GetByKey(target); err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, target, err)
 			return err
 
@@ -156,15 +194,15 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 	} else {
 		targetMeta = r.getMeta(targetObject)
 		targetSplit = []string{targetMeta.Namespace, targetMeta.Name}
-	}
 
-	if targetMeta != nil {
-		if ok, err := r.canReplicateTo(sourceMeta, targetMeta); !ok {
+		if ok, err := r.isReplicatedBy(targetMeta, sourceMeta); !ok {
 			log.Printf("replication of %s %s/%s is cancelled: %s",
 				r.Name, sourceMeta.Namespace, sourceMeta.Name, err)
 			return err
 		}
+	}
 
+	if targetMeta != nil {
 		if ok, err := r.needsUpdate(targetMeta, sourceMeta); !ok {
 			log.Printf("replication of %s %s/%s is skipped: %s",
 				r.Name, sourceMeta.Namespace, sourceMeta.Name, err)
@@ -186,7 +224,7 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 }
 
 func (r *objectReplicator) objectFromStore(key string) (interface{}, *metav1.ObjectMeta, error) {
-	if object, exists, err := r.store.GetByKey(key); err != nil {
+	if object, exists, err := r.objectStore.GetByKey(key); err != nil {
 		return nil, nil, fmt.Errorf("could not get %s %s: %s", r.Name, key, err)
 	} else if !exists {
 		return nil, nil, fmt.Errorf("could not get %s %s: does not exist", r.Name, key)
@@ -240,8 +278,10 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
 
-	if val, ok := r.targetMap[key]; ok {
-		r.deleteObject(val, object)
+	if targets, ok := r.targetMap[key]; ok {
+		for _, t := range targets {
+			r.deleteObject(t, object)
+		}
 		delete(r.targetMap, key)
 	}
 
@@ -311,7 +351,7 @@ func (r *objectReplicator) deleteObject(key string, sourceObject interface{}) (b
 	}
 
 	// make sure replication is allowed
-	if ok, err := r.canReplicateTo(sourceMeta, meta); !ok {
+	if ok, err := r.isReplicatedBy(meta, sourceMeta); !ok {
 		log.Printf("deletion of %s %s is cancelled: %s", r.Name, key, err)
 		return false, err
 	// delete the object

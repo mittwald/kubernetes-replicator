@@ -11,16 +11,45 @@ import (
 	"strings"
 )
 
+type targetPattern struct {
+	namesapce *regexp.Regexp
+	name      string
+}
+
+func (targetPattern pattern) MatchString(target string) bool {
+	parts := strings.SplitN("/", 2)
+	return len(parts) == 2 && parts[1] == pattern.name && pattern.namesapce.MatchString(parts[0])
+}
+
+func (targetPattern pattern) Match(object *metav1.ObjectMeta) bool {
+	return object.Name == pattern.name && pattern.namesapce.MatchString(object.Namespace)
+}
+
+func (targetPattern pattern) Targets(namespaces []string) []string {
+	suffix := "/" + name
+	targets := []string{}
+	for _, ns := range namespaces {
+		if pattern.namesapce.MatchString(ns) {
+			targets = append(targets, ns+suffix)
+		}
+	}
+	return targets
+}
+
 type replicatorProps struct {
-	Name       string
+	Name                string
+	allowAll            bool
+	client              kubernetes.Interface
 
-	client     kubernetes.Interface
-	store      cache.Store
-	controller cache.Controller
-	allowAll   bool
+	objectStore         cache.Store
+	objectController    cache.Controller
 
-	dependencyMap map[string][]string
-	targetMap map[string]string
+	namespaceStore      cache.Store
+	namespaceController cache.Controller
+
+	dependencyMap       map[string][]string
+	targetMap           map[string][]string
+	targetPatternMap    map[string][]targetPattern
 }
 
 // Replicator describes the common interface that the secret and configmap
@@ -151,18 +180,129 @@ func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *m
 // It means that the target object was created using replication of the same source
 // Returns true if replication is allowed
 // If replication is not allowed returns false with error message
-func (r *replicatorProps) canReplicateTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
+func (r *replicatorProps) isReplicatedBy(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
 	// make sure that the target object was created from the source
-	if annotationFrom, ok := targetObject.Annotations[ReplicatedByAnnotation]; !ok {
+	if annotationFrom, ok := object.Annotations[ReplicatedByAnnotation]; !ok {
 		return false, fmt.Errorf("target %s/%s was not replicated",
-			targetObject.Namespace, targetObject.Name)
+			object.Namespace, object.Name)
 
-	} else if annotationFrom != fmt.Sprintf("%s/%s", object.Namespace, object.Name) {
+	} else if annotationFrom != fmt.Sprintf("%s/%s", sourceObject.Namespace, sourceObject.Name) {
 		return false, fmt.Errorf("target %s/%s was not replicated from %s/%s",
-			targetObject.Namespace, targetObject.Name, object.Namespace, object.Name)
+			object.Namespace, object.Name, sourceObject.Namespace, sourceObject.Name)
 	}
 
 	return true, nil
+}
+
+func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
+	targets, targetPatterns, err := getReplicationTargets(object)
+	if err != nil {
+		return false, err
+	}
+
+	key := fmt.Sprintf("%s/%s", targetObject.Namespace, targetObject.Name)
+	for _, t := range targets {
+		if t == key {
+			return true, nil
+		}
+	}
+
+	for _, p := range targetPatterns {
+		if p.Match(targetObject) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+
+	// return false, fmt.Error("source %s/%s is not replated to %s",
+	// 	object.Namespace, object.Name, key)
+}
+
+var validName = regexp.MustCompile(`^[0-9a-z.-]*$`)
+
+func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]string, []targetPattern, error) {
+	if annotationTo, okTo := object.Annotations[ReplicateToAnnotation]
+	if annotationToNs, okToNs := object.Annotations[ReplicateToNamespacesAnnotation]
+	if !okTo && !okToNs {
+		return nil, nil, nil
+	}
+
+	targets := []string{}
+	targetPatterns := []targetPattern{}
+	seen := []string{}
+	var names, namespaces, qualified := map[string]bool
+
+	if !okTo {
+		names = map[string]bool{object.Name: true}
+	} else {
+		names = map[string]bool{}
+		qualified = map[string]bool{}
+		for _ n := range strings.Split(annotationTo, ",") {
+			if strings.ContainsAny(n, "/") {
+				qualified[n] = true
+			} else if n != "" {
+				names[n] = true
+			}
+		}
+	}
+
+	if !okToNs {
+		namespaces = map[string]bool{object.Namespace: true}
+	} else {
+		namespaces = map[string]bool{}
+		for _ ns := range strings.Split(annotationToNs, ",") {
+			if n != "" {
+				namespaces[ns] = true
+			}
+		}
+	}
+
+	for ns := range namespaces {
+		if validName.MatchString(ns) {
+			ns = ns + "/"
+			for n := range names {
+				n = ns + n
+				if !seen[n] {
+					seen[n] = true
+					targets = append(targets, n)
+				}
+			}
+		} else if regex, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
+			ns = ns + "/"
+			for n := range names {
+				full := ns + n
+				if !seen[full] {
+					seen[full] = true
+					targetPatterns = append(targetPatterns, targetPattern{regex, n})
+				}
+			}
+		} else {
+			return nil, nil, fmt.Errorf("source %s/%s has compilation error on annotation %s (%s): %s",
+				object.Namespace, object.Name, ReplicateToNamespacesAnnotation, ns, err)
+		}
+	}
+
+	for q := range qualified {
+		if seen[q] {
+		// check that there is exactly one "/"
+		} if qs := strings.SplitN(q, "/", 3); len(qs) != 2 {
+			return nil, nil, fmt.Errorf("source %s/%s has invalid path on annotation %s (%s)",
+				object.Namespace, object.Name, ReplicateToAnnotation, q)
+		// check if the namesapce is a pattern
+		} else if ns, n := qs[0], qs[1]; validName.MatchString(ns) {
+			targets = append(targets, q)
+		// check that the pattern compiles
+		} else if pattern, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
+			targetPatterns = append(targetPatterns, targetPattern{regex, n})
+		// raise compilation error
+		} else {
+			return nil, nil, fmt.Errorf("source %s/%s has compilation error on annotation %s (%s): %s",
+				object.Namespace, object.Name, ReplicateToAnnotation, ns, err)
+		}
+	}
+
+	return targets, targetPatterns, nil
 }
 
 // Returns an annotation as "namespace/name" format
