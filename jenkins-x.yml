@@ -6,15 +6,15 @@ pipelineConfig:
     pullRequest:
       pipeline:
         options:
-          # volumes:
-          # - name: workspace-volume
-          #   emptyDir: {}
-          # - name: docker-daemon
-          #   hostPath:
-          #     path: /var/run/docker.sock
-          # - name: volume-0
-          #   secret:
-          #     secretName: jenkins-docker-cfg
+          volumes:
+          - name: workspace-volume
+            emptyDir: {}
+          - name: docker-daemon
+            hostPath:
+              path: /var/run/docker.sock
+          - name: volume-0
+            secret:
+              secretName: jenkins-docker-cfg
           containerOptions:
             env:
             - name: DOCKER_REGISTRY
