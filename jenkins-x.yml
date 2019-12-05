@@ -81,7 +81,7 @@ pipelineConfig:
         #     dir: /workspace/source/charts/preview
         #     name: jx-preview
         stages:
-        - name: from-build-pack2
+        - name: main
           agent:
             image: go
             # image: asia.gcr.io/olli-iviet/builder-go:yaml1
