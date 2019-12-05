@@ -16,7 +16,7 @@ pipelineConfig:
               path: /var/run/docker.sock
           - name: volume-0
             secret:
-              secretName: jenkins-docker-cf
+              secretName: jenkins-docker-cfg
           containerOptions:
             env:
             - name: DOCKER_REGISTRY
@@ -127,7 +127,7 @@ pipelineConfig:
               path: /var/run/docker.sock
           - name: volume-0
             secret:
-              secretName: jenkins-docker-cf
+              secretName: jenkins-docker-cfg
           containerOptions:
             env:
             - name: DOCKER_REGISTRY
