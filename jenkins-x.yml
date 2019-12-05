@@ -82,7 +82,7 @@ pipelineConfig:
         stages:
         - name: from-build-pack
           agent:
-            image: go
+            image: asia.gcr.io/olli-iviet/builder-go:yaml1
           steps:
           - args:
             - --cache=true
