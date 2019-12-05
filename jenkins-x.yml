@@ -85,7 +85,7 @@ pipelineConfig:
           agent:
             # image: go
             image: asia.gcr.io/olli-iviet/builder-go:yaml1
-            # label: jenkins-go
+            label: jenkins-go
           steps:
           - args:
             - --cache=true
