@@ -3,6 +3,7 @@ package replicate
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -19,14 +20,49 @@ var ConfigMapActions *configMapActions = &configMapActions{}
 func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := objectReplicator{
 		replicatorProps: replicatorProps{
-			Name:          "config map",
-			allowAll:      allowAll,
-			client:        client,
-			dependencyMap: make(map[string][]string),
-			targetMap:     make(map[string][]string),
+			Name:              "config map",
+			allowAll:          allowAll,
+			client:            client,
+
+			targetsFrom:       make(map[string][]string),
+			targetsTo:         make(map[string][]string),
+
+			watchedNamespaces: make(map[string][]string),
+			patternNamespaces: make(map[string][]*regexp.Regexp),
 		},
 		replicatorActions: ConfigMapActions,
 	}
+
+	namespaceStore, namespaceController := cache.NewInformer(
+		&cache.ListWatch{
+			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
+				list, err := client.CoreV1().Namespaces().List(lo)
+				if err != nil {
+					return list, err
+				}
+				// populate the store already, to avoid believing some items are deleted
+				copy := make([]interface{}, len(list.Items))
+				for index := range list.Items {
+					copy[index] = &list.Items[index]
+				}
+				repl.namespaceStore.Replace(copy, "init")
+				return list, err
+			},
+			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Namespaces().Watch(lo)
+			},
+		},
+		&v1.Namespace{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    repl.NamespaceAdded,
+			UpdateFunc: func(old interface{}, new interface{}) {},
+			DeleteFunc: func(obj interface{}) {},
+		},
+	)
+
+	repl.namespaceStore = namespaceStore
+	repl.namespaceController = namespaceController
 
 	objectStore, objectController := cache.NewInformer(
 		&cache.ListWatch{

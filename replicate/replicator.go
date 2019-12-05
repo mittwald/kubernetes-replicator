@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -24,29 +25,133 @@ type objectReplicator struct {
 }
 
 func (r *objectReplicator) Synced() bool {
-	return r.objectController.HasSynced()
+	return r.namespaceController.HasSynced() && r.objectController.HasSynced()
 }
 
-func (r *objectReplicator) Run() {
+func (r *objectReplicator) Start() {
 	log.Printf("running %s object controller", r.Name)
-	r.objectController.Run(wait.NeverStop)
+	go r.namespaceController.Run(wait.NeverStop)
+	go r.objectController.Run(wait.NeverStop)
 }
 
-func (r *objectReplicator) ObjectAdded(object interface{}) {
+func (r *objectReplicator) NamespaceAdded(object interface{}) {
+	namespace := object.(*v1.Namespace)
+	// find all the objects which want to replicate to that namesapce
+	todo := map[string]bool{}
 
+	for source, watched := range r.watchedNamespaces {
+		for _, ns := range watched {
+			if ns == namespace.Name {
+				todo[source] = true
+				break
+			}
+		}
+	}
+
+	for source, patterns := range r.patternNamespaces {
+		if todo[source] {
+			continue
+		}
+
+		for _, p := range patterns {
+			if p.MatchString(namespace.Name) {
+				todo[source] = true
+				break
+			}
+		}
+	}
+	// get all sources and let them replicate
+	for source := range todo {
+		if sourceObject, exists, err := r.objectStore.GetByKey(source); err != nil {
+			log.Printf("could not get %s %s: %s", r.Name, source, err)
+		// it should not happen, but maybe `ObjectAdded` hasn't been called yet
+		// just clean watched namespaces and pattern namespaces to avoid this to happen again
+		} else if !exists {
+			log.Printf("%s %s not found", r.Name, source)
+			delete(r.watchedNamespaces, source)
+			delete(r.patternNamespaces, source)
+		// let the source replicate
+		} else {
+			log.Printf("%s %s is watching namespace %s", r.Name, source, namespace.Name)
+			r.objectWatchNamespace(sourceObject, namespace.Name)
+		}
+	}
+}
+
+func (r *objectReplicator) objectWatchNamespace(object interface{}, namesapce string) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
-
-	targets, targetPatterns, err := r.getReplicationTargets(meta)
+	// those annotations have priority
+	if _, ok := meta.Annotations[ReplicatedByAnnotation]; ok {
+		return
+	} else if _, ok := meta.Annotations[ReplicateFromAnnotation]; ok {
+		return
+	}
+	// get all targets
+	targets, targetPatterns, _, err := r.getReplicationTargets(meta)
 	if err != nil {
 		log.Printf("could not parse %s %s: %s", r.Name, key, err)
 		return
 	}
+	// find the ones matching with the namespace
+	existingTargets := map[string]bool{}
 
-	if oldTargets, ok := r.targetMap[key]; ok {
+	for _, target := range targets {
+		if namesapce == strings.SplitN(target, "/", 2)[0] {
+			existingTargets[target] = true
+		}
+	}
+
+	for _, pattern := range targetPatterns {
+		if target := pattern.MatchNamespace(namesapce); target != "" {
+			existingTargets[target] = true
+		}
+	}
+	// cannot target itself
+	delete(existingTargets, key)
+	if len(existingTargets) == 0 {
+		return
+	}
+	// get the current targets in order to update the slice
+	currentTargets, ok := r.targetsTo[key]
+	if !ok {
+		currentTargets = []string{}
+	}
+	// install all the new targets
+	for target := range existingTargets {
+		log.Printf("%s %s is replicated to %s", r.Name, key, target)
+		currentTargets = append(currentTargets, target)
+		r.installObject(target, nil, object)
+	}
+	// update the current targets
+	r.targetsTo[key] = currentTargets
+	// no need to update watched namespaces nor pattern namespaces
+	// because if we are here, it means they already match this namespace
+}
+
+func (r *objectReplicator) ObjectAdded(object interface{}) {
+	meta := r.getMeta(object)
+	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
+	// get replication targets
+	targets, targetPatterns, patterns, err := r.getReplicationTargets(meta)
+	if err != nil {
+		log.Printf("could not parse %s %s: %s", r.Name, key, err)
+		return
+	}
+	// if it was already replicated to some targets
+	// check that the annotations still permit it
+	if oldTargets, ok := r.targetsTo[key]; ok {
 		log.Printf("source %s %s changed", r.Name, key)
+
+		sort.Strings(oldTargets)
+		previous := ""
 Targets:
 		for _, target := range oldTargets {
+			if target == previous {
+				continue Targets
+			}
+			previous = target
+
 			for _, t := range targets {
 				if t == target {
 					continue Targets
@@ -57,18 +162,22 @@ Targets:
 					continue Targets
 				}
 			}
+			// apparently this target is not valid anymore
 			log.Printf("annotation of source %s %s changed: deleting target %s",
 				r.Name, key, target)
 			r.deleteObject(target, object)
 		}
-		delete(r.targetMap, key)
 	}
-
-	if replicas, ok := r.dependencyMap[key]; ok {
+	// clean all thos fields, they will be refilled further anyway
+	delete(r.targetsTo, key)
+	delete(r.watchedNamespaces, key)
+	delete(r.patternNamespaces, key)
+	// check for object having dependencies, and update them
+	if replicas, ok := r.targetsFrom[key]; ok {
 		log.Printf("%s %s has %d dependents", r.Name, key, len(replicas))
 		r.updateDependents(object, replicas)
 	}
-
+	// this object was replicated by another, update it
 	if val, ok := meta.Annotations[ReplicatedByAnnotation]; ok {
 		log.Printf("%s %s is replicated by %s", r.Name, key, val)
 		sourceObject, exists, err := r.objectStore.GetByKey(val)
@@ -77,7 +186,7 @@ Targets:
 		if err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, val, err)
 			return
-
+		// the source has been deleted, so should this object be
 		} else if !exists {
 			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
 			sourceMeta = nil
@@ -85,7 +194,7 @@ Targets:
 		} else if ok, err := r.isReplicatedTo(sourceMeta, meta); err != nil {
 			log.Printf("could not parse %s %s: %s", r.Name, val, err)
 			return
-
+		// the source annotations have changed, this replication is deleted
 		} else if !ok {
 			log.Printf("source %s %s is not replicated to %s: deleting target", r.Name, val, key)
 			sourceMeta = nil
@@ -100,54 +209,90 @@ Targets:
 			return
 		}
 	}
-
+	// this object is replicated from another, update it
 	if val, ok := resolveAnnotation(meta, ReplicateFromAnnotation); ok {
 		log.Printf("%s %s is replicated from %s", r.Name, key, val)
-
-		if _, ok := r.dependencyMap[val]; !ok {
-			r.dependencyMap[val] = make([]string, 0, 1)
+		// update the dependencies of the source, even if it maybe does not exist yet
+		if _, ok := r.targetsFrom[val]; !ok {
+			r.targetsFrom[val] = make([]string, 0, 1)
 		}
-		r.dependencyMap[val] = append(r.dependencyMap[val], key)
+		r.targetsFrom[val] = append(r.targetsFrom[val], key)
 
 		if sourceObject, exists, err := r.objectStore.GetByKey(val); err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, val, err)
 			return
-
+		// the source does not exist anymore/yet, clear the data of the target
 		} else if !exists {
-			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
+			log.Printf("source %s %s deleted: clearing target %s", r.Name, val, key)
 			r.doClearObject(object)
 			return
-
+		// update the target
 		} else {
 			r.replicateObject(object, sourceObject)
 			return
 		}
 	}
-
+	// this object is replicated to other locations
 	if len(targets) > 0 || len(targetPatterns) > 0 {
+		existsNamespaces := map[string]bool{} // a cache to remember the done lookups
+		watchedNamespaces := []string{} // the slice of all namespaces this object targets
+		existingTargets := []string{} // the slice of all the target this object should replicate to
 
-		if len(targetPatterns) > 0 {
-			namespaces := r.namespaceStore.ListKeys()
-			seen := map[string]bool{}
-			for _, t := range(targets) {
-				seen[t] = true
-			}
+		for _, t := range(targets) {
+			ns := strings.SplitN(t, "/", 2)[0]
+			// already in cache
+			if exists, ok := existsNamespaces[ns]; ok {
+				if exists  {
+					existingTargets = append(existingTargets, t)
+				}
 
-			for _, p := range targetPatterns {
-				for _, t := range p.Targets(namespaces) {
-					if !seen[t] {
-						seen[t] = true
-						targets = append(targets, t)
-					}
+			} else if _, exists, err := r.namespaceStore.GetByKey(ns); err != nil {
+				log.Printf("could not get namespace %s: %s", ns, err)
+			// update the cache and the watched namespaces
+			} else {
+				existsNamespaces[ns] = exists
+				watchedNamespaces = append(watchedNamespaces, ns)
+				if exists {
+					existingTargets = append(existingTargets, t)
 				}
 			}
 		}
 
-		r.targetMap[key] = targets
-		for _, t := range(targets) {
-			log.Printf("%s %s is replicated to %s", r.Name, key, t)
-			r.installObject(t, nil, object)
+		if len(targetPatterns) > 0 {
+			namespaces := r.namespaceStore.ListKeys()
+			// cache all existing targets
+			seen := map[string]bool{key: true}
+			for _, t := range(existingTargets) {
+				seen[t] = true
+			}
+			// find which new targets match the patterns
+			for _, p := range targetPatterns {
+				for _, t := range p.Targets(namespaces) {
+					if !seen[t] {
+						seen[t] = true
+						existingTargets = append(existingTargets, t)
+					}
+				}
+			}
 		}
+		// save all those info
+		if len(watchedNamespaces) > 0 {
+			r.watchedNamespaces[key] = watchedNamespaces
+		}
+
+		if len(patterns) > 0 {
+			r.patternNamespaces[key] = patterns
+		}
+
+		if len(existingTargets) > 0 {
+			r.targetsTo[key] = existingTargets
+			// create all targets
+			for _, t := range(existingTargets) {
+				log.Printf("%s %s is replicated to %s", r.Name, key, t)
+				r.installObject(t, nil, object)
+			}
+		}
+
 		return
 	}
 }
@@ -266,9 +411,9 @@ func (r *objectReplicator) updateDependents(object interface{}, replicas []strin
 	}
 
 	if len(updatedReplicas) > 0 {
-		r.dependencyMap[key] = updatedReplicas
+		r.targetsFrom[key] = updatedReplicas
 	} else {
-		delete(r.dependencyMap, key)
+		delete(r.targetsFrom, key)
 	}
 
 	return nil
@@ -278,14 +423,16 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
 
-	if targets, ok := r.targetMap[key]; ok {
+	if targets, ok := r.targetsTo[key]; ok {
 		for _, t := range targets {
 			r.deleteObject(t, object)
 		}
-		delete(r.targetMap, key)
 	}
+	delete(r.targetsTo, key)
+	delete(r.watchedNamespaces, key)
+	delete(r.patternNamespaces, key)
 
-	replicas, ok := r.dependencyMap[key]
+	replicas, ok := r.targetsFrom[key]
 	if !ok {
 		return
 	}
@@ -307,9 +454,9 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 	}
 
 	if len(updatedReplicas) > 0 {
-		r.dependencyMap[key] = updatedReplicas
+		r.targetsFrom[key] = updatedReplicas
 	} else {
-		delete(r.dependencyMap, key)
+		delete(r.targetsFrom, key)
 	}
 }
 
