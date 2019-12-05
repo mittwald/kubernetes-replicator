@@ -16,17 +16,17 @@ type targetPattern struct {
 	name      string
 }
 
-func (targetPattern pattern) MatchString(target string) bool {
-	parts := strings.SplitN("/", 2)
+func (pattern targetPattern) MatchString(target string) bool {
+	parts := strings.SplitN(target, "/", 2)
 	return len(parts) == 2 && parts[1] == pattern.name && pattern.namesapce.MatchString(parts[0])
 }
 
-func (targetPattern pattern) Match(object *metav1.ObjectMeta) bool {
+func (pattern targetPattern) Match(object *metav1.ObjectMeta) bool {
 	return object.Name == pattern.name && pattern.namesapce.MatchString(object.Namespace)
 }
 
-func (targetPattern pattern) Targets(namespaces []string) []string {
-	suffix := "/" + name
+func (pattern targetPattern) Targets(namespaces []string) []string {
+	suffix := "/" + pattern.name
 	targets := []string{}
 	for _, ns := range namespaces {
 		if pattern.namesapce.MatchString(ns) {
@@ -195,7 +195,7 @@ func (r *replicatorProps) isReplicatedBy(object *metav1.ObjectMeta, sourceObject
 }
 
 func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
-	targets, targetPatterns, err := getReplicationTargets(object)
+	targets, targetPatterns, err := r.getReplicationTargets(object)
 	if err != nil {
 		return false, err
 	}
@@ -222,23 +222,23 @@ func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject
 var validName = regexp.MustCompile(`^[0-9a-z.-]*$`)
 
 func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]string, []targetPattern, error) {
-	if annotationTo, okTo := object.Annotations[ReplicateToAnnotation]
-	if annotationToNs, okToNs := object.Annotations[ReplicateToNamespacesAnnotation]
+	annotationTo, okTo := object.Annotations[ReplicateToAnnotation]
+	annotationToNs, okToNs := object.Annotations[ReplicateToNamespacesAnnotation]
 	if !okTo && !okToNs {
 		return nil, nil, nil
 	}
 
 	targets := []string{}
 	targetPatterns := []targetPattern{}
-	seen := []string{}
-	var names, namespaces, qualified := map[string]bool
+	seen := map[string]bool{}
+	var names, namespaces, qualified map[string]bool
 
 	if !okTo {
 		names = map[string]bool{object.Name: true}
 	} else {
 		names = map[string]bool{}
 		qualified = map[string]bool{}
-		for _ n := range strings.Split(annotationTo, ",") {
+		for _, n := range strings.Split(annotationTo, ",") {
 			if strings.ContainsAny(n, "/") {
 				qualified[n] = true
 			} else if n != "" {
@@ -251,8 +251,8 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		namespaces = map[string]bool{object.Namespace: true}
 	} else {
 		namespaces = map[string]bool{}
-		for _ ns := range strings.Split(annotationToNs, ",") {
-			if n != "" {
+		for _, ns := range strings.Split(annotationToNs, ",") {
+			if ns != "" {
 				namespaces[ns] = true
 			}
 		}
@@ -268,13 +268,13 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 					targets = append(targets, n)
 				}
 			}
-		} else if regex, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
+		} else if pattern, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
 			ns = ns + "/"
 			for n := range names {
 				full := ns + n
 				if !seen[full] {
 					seen[full] = true
-					targetPatterns = append(targetPatterns, targetPattern{regex, n})
+					targetPatterns = append(targetPatterns, targetPattern{pattern, n})
 				}
 			}
 		} else {
@@ -286,7 +286,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 	for q := range qualified {
 		if seen[q] {
 		// check that there is exactly one "/"
-		} if qs := strings.SplitN(q, "/", 3); len(qs) != 2 {
+		} else if qs := strings.SplitN(q, "/", 3); len(qs) != 2 {
 			return nil, nil, fmt.Errorf("source %s/%s has invalid path on annotation %s (%s)",
 				object.Namespace, object.Name, ReplicateToAnnotation, q)
 		// check if the namesapce is a pattern
@@ -294,7 +294,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 			targets = append(targets, q)
 		// check that the pattern compiles
 		} else if pattern, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
-			targetPatterns = append(targetPatterns, targetPattern{regex, n})
+			targetPatterns = append(targetPatterns, targetPattern{pattern, n})
 		// raise compilation error
 		} else {
 			return nil, nil, fmt.Errorf("source %s/%s has compilation error on annotation %s (%s): %s",

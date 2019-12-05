@@ -37,7 +37,7 @@ func (r *objectReplicator) ObjectAdded(object interface{}) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
 
-	targets, targetPatterns, err := getReplicationTargets(meta)
+	targets, targetPatterns, err := r.getReplicationTargets(meta)
 	if err != nil {
 		log.Printf("could not parse %s %s: %s", r.Name, key, err)
 		return
@@ -52,7 +52,7 @@ Targets:
 					continue Targets
 				}
 			}
-			for _, p := targetPatterns {
+			for _, p := range targetPatterns {
 				if p.MatchString(target) {
 					continue Targets
 				}
@@ -82,11 +82,11 @@ Targets:
 			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
 			sourceMeta = nil
 
-		} else if ok, err := r.isReplicatedTo(); err != nil {
+		} else if ok, err := r.isReplicatedTo(sourceMeta, meta); err != nil {
 			log.Printf("could not parse %s %s: %s", r.Name, val, err)
 			return
 
-		} else if ! ok {
+		} else if !ok {
 			log.Printf("source %s %s is not replicated to %s: deleting target", r.Name, val, key)
 			sourceMeta = nil
 		}
@@ -134,7 +134,7 @@ Targets:
 			}
 
 			for _, p := range targetPatterns {
-				for _, t := p.Targets(namespaces) {
+				for _, t := range p.Targets(namespaces) {
 					if !seen[t] {
 						seen[t] = true
 						targets = append(targets, t)
