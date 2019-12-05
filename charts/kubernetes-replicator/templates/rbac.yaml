@@ -12,7 +12,7 @@ rules:
   resources: ["secrets", "configmaps"]
   verbs: ["get", "watch", "list", "create", "update", "delete"]
 - apiGroups: [""] # "" indicates the core API group
-  resources: ["namespace"]
+  resources: ["namespaces"]
   verbs: ["get", "watch", "list"]
 ---
 kind: ClusterRoleBinding
