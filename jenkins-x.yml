@@ -1,22 +1,20 @@
 buildPack: go
 pipelineConfig:
   agent:
-    # image: asia.gcr.io/olli-iviet/builder-go:yaml1
     image: go
-    label: jenkins-go
   pipelines:
     pullRequest:
       pipeline:
         options:
-          volumes:
-          - name: workspace-volume
-            emptyDir: {}
-          - name: docker-daemon
-            hostPath:
-              path: /var/run/docker.sock
-          - name: volume-0
-            secret:
-              secretName: jenkins-docker-cfg
+          # volumes:
+          # - name: workspace-volume
+          #   emptyDir: {}
+          # - name: docker-daemon
+          #   hostPath:
+          #     path: /var/run/docker.sock
+          # - name: volume-0
+          #   secret:
+          #     secretName: jenkins-docker-cfg
           containerOptions:
             env:
             - name: DOCKER_REGISTRY
@@ -55,8 +53,42 @@ pipelineConfig:
               name: docker-daemon
             - mountPath: /home/jenkins/.docker
               name: volume-0
+        stages:
+        - name: build
+          agent:
+            image: go
+          steps:
+          - args:
+            - --cache=true
+            - --cache-dir=/workspace
+            - --context=/workspace/source
+            - --dockerfile=/workspace/source/Dockerfile
+            - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:${inputs.params.version}
+            - --cache-repo=asia.gcr.io/olli-iviet/cache
+            - --skip-tls-verify-registry=asia.gcr.io
+            command: /kaniko/executor
+            dir: /workspace/source
+            image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
+            name: container-build
+        - name: postbuild
+          agent:
+            image: go
+          steps:
+          - command: jx step post build --image $DOCKER_REGISTRY/$ORG/$APP_NAME:$PREVIEW_VERSION
+            dir: /workspace/source
+            name: post-build
+        - name: promote
+          agent:
+            image: go
+          steps:
+          - command: make preview
+            dir: /workspace/source/charts/preview
+            name: make-preview
+          - command: jx preview --app $APP_NAME --dir ../..
+            dir: /workspace/source/charts/preview
+            name: jx-preview
         # stages:
-        # - name: build
+        # - name: main
         #   agent:
         #     image: go
         #   steps:
@@ -71,63 +103,28 @@ pipelineConfig:
         #     command: /kaniko/executor
         #     dir: /workspace/source
         #     image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
-        #     name: container-build
-        # - name: postbuild
-        #   agent:
-        #     image: go
-        #   steps:
+        #     name: build-container-build
         #   - command: jx step post build --image $DOCKER_REGISTRY/$ORG/$APP_NAME:$PREVIEW_VERSION
         #     dir: /workspace/source
-        #     name: post-build
-        # - name: promote
-        #   agent:
-        #     image: go
-        #   steps:
+        #     name: postbuild-post-build
         #   - command: make preview
         #     dir: /workspace/source/charts/preview
-        #     name: make-preview
+        #     name: promote-make-preview
         #   - command: jx preview --app $APP_NAME --dir ../..
         #     dir: /workspace/source/charts/preview
-        #     name: jx-preview
-        stages:
-        - name: main
-          agent:
-            # image: go
-            image: asia.gcr.io/olli-iviet/builder-go:yaml2
-          steps:
-          - args:
-            - --cache=true
-            - --cache-dir=/workspace
-            - --context=/workspace/source
-            - --dockerfile=/workspace/source/Dockerfile
-            - --destination=asia.gcr.io/olli-iviet/kubernetes-replicator:${inputs.params.version}
-            - --cache-repo=asia.gcr.io/olli-iviet/cache
-            - --skip-tls-verify-registry=asia.gcr.io
-            command: /kaniko/executor
-            dir: /workspace/source
-            image: gcr.io/kaniko-project/executor:9912ccbf8d22bbafbf971124600fbb0b13b9cbd6
-            name: build-container-build
-          - command: jx step post build --image $DOCKER_REGISTRY/$ORG/$APP_NAME:$PREVIEW_VERSION
-            dir: /workspace/source
-            name: postbuild-post-build
-          - command: make preview
-            dir: /workspace/source/charts/preview
-            name: promote-make-preview
-          - command: jx preview --app $APP_NAME --dir ../..
-            dir: /workspace/source/charts/preview
-            name: promote-jx-preview
+        #     name: promote-jx-preview
     release:
       pipeline:
         options:
-          volumes:
-          - name: workspace-volume
-            emptyDir: {}
-          - name: docker-daemon
-            hostPath:
-              path: /var/run/docker.sock
-          - name: volume-0
-            secret:
-              secretName: jenkins-docker-cfg
+          # volumes:
+          # - name: workspace-volume
+          #   emptyDir: {}
+          # - name: docker-daemon
+          #   hostPath:
+          #     path: /var/run/docker.sock
+          # - name: volume-0
+          #   secret:
+          #     secretName: jenkins-docker-cfg
           containerOptions:
             env:
             - name: DOCKER_REGISTRY
