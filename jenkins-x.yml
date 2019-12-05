@@ -83,9 +83,8 @@ pipelineConfig:
         stages:
         - name: main
           agent:
-            # image: go
-            image: asia.gcr.io/olli-iviet/builder-go:yaml1
-            label: go
+            image: go
+            # image: asia.gcr.io/olli-iviet/builder-go:yaml1
           steps:
           - args:
             - --cache=true
