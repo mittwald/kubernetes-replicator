@@ -1,7 +1,8 @@
 buildPack: go
 pipelineConfig:
   agent:
-    image: asia.gcr.io/olli-iviet/builder-go:yaml1
+    # image: asia.gcr.io/olli-iviet/builder-go:yaml1
+    image: go
     label: jenkins-go
   pipelines:
     pullRequest:
@@ -82,8 +83,9 @@ pipelineConfig:
         stages:
         - name: from-build-pack
           agent:
-            image: asia.gcr.io/olli-iviet/builder-go:yaml1
-            label: jenkins-go
+            image: go
+            # image: asia.gcr.io/olli-iviet/builder-go:yaml1
+            # label: jenkins-go
           steps:
           - args:
             - --cache=true
