@@ -36,7 +36,7 @@ Create chart name and version as used by the chart label.
   {{- if .Values.prefix -}}
   	{{ .Values.prefix | quote }}
   {{- else if hasPrefix .Values.previewNSPrefix .Release.Namespace -}}
-    "{{ .Release.Namespace | replace .Values.previewNSPrefix "" | trimPrefix "-" }}.preview.kubernetes-replicator.olli.com/""
+    "{{ .Release.Namespace | replace .Values.previewNSPrefix "" | trimPrefix "-" }}.preview.kubernetes-replicator.olli.com/"
   {{- else if eq .Release.Namespace "jx" -}}
   	"v1.kubernetes-replicator.olli.com/"
   {{- else if $test -}}

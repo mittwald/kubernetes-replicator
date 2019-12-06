@@ -11,6 +11,9 @@ rules:
 - apiGroups: [""] # "" indicates the core API group
   resources: ["secrets", "configmaps"]
   verbs: ["get", "watch", "list", "create", "update", "delete"]
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["namespaces"]
+  verbs: ["get", "watch", "list"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1

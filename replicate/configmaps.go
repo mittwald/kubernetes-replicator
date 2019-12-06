@@ -19,16 +19,51 @@ var ConfigMapActions *configMapActions = &configMapActions{}
 func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := objectReplicator{
 		replicatorProps: replicatorProps{
-			Name:          "config map",
-			allowAll:      allowAll,
-			client:        client,
-			dependencyMap: make(map[string][]string),
-			targetMap:     make(map[string]string),
+			Name:            "config map",
+			allowAll:        allowAll,
+			client:          client,
+
+			targetsFrom:     make(map[string][]string),
+			targetsTo:       make(map[string][]string),
+
+			watchedTargets:  make(map[string][]string),
+			watchedPatterns: make(map[string][]targetPattern),
 		},
 		replicatorActions: ConfigMapActions,
 	}
 
-	store, controller := cache.NewInformer(
+	namespaceStore, namespaceController := cache.NewInformer(
+		&cache.ListWatch{
+			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
+				list, err := client.CoreV1().Namespaces().List(lo)
+				if err != nil {
+					return list, err
+				}
+				// populate the store already, to avoid believing some items are deleted
+				copy := make([]interface{}, len(list.Items))
+				for index := range list.Items {
+					copy[index] = &list.Items[index]
+				}
+				repl.namespaceStore.Replace(copy, "init")
+				return list, err
+			},
+			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
+				return client.CoreV1().Namespaces().Watch(lo)
+			},
+		},
+		&v1.Namespace{},
+		resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    repl.NamespaceAdded,
+			UpdateFunc: func(old interface{}, new interface{}) {},
+			DeleteFunc: func(obj interface{}) {},
+		},
+	)
+
+	repl.namespaceStore = namespaceStore
+	repl.namespaceController = namespaceController
+
+	objectStore, objectController := cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
 				list, err := client.CoreV1().ConfigMaps("").List(lo)
@@ -40,7 +75,7 @@ func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Durat
 				for index := range list.Items {
 					copy[index] = &list.Items[index]
 				}
-				repl.store.Replace(copy, "init")
+				repl.objectStore.Replace(copy, "init")
 				return list, err
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
@@ -56,8 +91,8 @@ func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Durat
 		},
 	)
 
-	repl.store = store
-	repl.controller = controller
+	repl.objectStore = objectStore
+	repl.objectController = objectController
 
 	return &repl
 }
@@ -108,7 +143,7 @@ func (*configMapActions) update(r *replicatorProps, object interface{}, sourceOb
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -129,7 +164,7 @@ func (*configMapActions) clear(r *replicatorProps, object interface{}) error {
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -183,7 +218,7 @@ func (*configMapActions) install(r *replicatorProps, meta *metav1.ObjectMeta, so
 		return err
 	}
 
-	r.store.Update(s)
+	r.objectStore.Update(s)
 	return nil
 }
 
@@ -203,6 +238,6 @@ func (*configMapActions) delete(r *replicatorProps, object interface{}) error {
 		return err
 	}
 
-	r.store.Delete(configMap)
+	r.objectStore.Delete(configMap)
 	return nil
 }

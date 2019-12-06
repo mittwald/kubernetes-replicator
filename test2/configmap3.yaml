@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: configmap3
   annotations:
-    replicator.v1.mittwald.de/replicate-to: "configmap4"
+    pr-1.preview.kubernetes-replicator.olli.com/replicate-to: "configmap4"
 data:
   source: configmap3
 binaryData:

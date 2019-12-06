@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: configmap2
   annotations:
-    replicator.v1.mittwald.de/replicate-from: "test/configmap1"
+    pr-1.preview.kubernetes-replicator.olli.com/replicate-from: "test/configmap1"

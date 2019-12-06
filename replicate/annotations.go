@@ -4,6 +4,7 @@ package replicate
 var (
 	ReplicateFromAnnotation         = "replicate-from"
 	ReplicateToAnnotation           = "replicate-to"
+	ReplicateToNamespacesAnnotation = "replicate-to-namespaces"
 	ReplicateOnceAnnotation         = "replicate-once"
 	ReplicateOnceVersionAnnotation  = "replicate-once-version"
 	ReplicatedAtAnnotation          = "replicated-at"
@@ -16,6 +17,7 @@ var (
 func PrefixAnnotations(prefix string){
 	ReplicateFromAnnotation         = prefix + ReplicateFromAnnotation
 	ReplicateToAnnotation           = prefix + ReplicateToAnnotation
+	ReplicateToNamespacesAnnotation = prefix + ReplicateToNamespacesAnnotation
 	ReplicateOnceAnnotation         = prefix + ReplicateOnceAnnotation
 	ReplicateOnceVersionAnnotation  = prefix + ReplicateOnceVersionAnnotation
 	ReplicatedAtAnnotation          = prefix + ReplicatedAtAnnotation

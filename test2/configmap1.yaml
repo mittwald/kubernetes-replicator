@@ -3,8 +3,8 @@ kind: ConfigMap
 metadata:
   name: configmap1
   annotations:
-    replicator.v1.mittwald.de/replication-allowed: "true"
-    replicator.v1.mittwald.de/replication-allowed-namespaces: "test"
+    pr-1.preview.kubernetes-replicator.olli.com/replication-allowed: "true"
+    pr-1.preview.kubernetes-replicator.olli.com/replication-allowed-namespaces: "test"
 data:
   source: configmap1
 binaryData:
