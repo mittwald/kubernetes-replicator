@@ -70,10 +70,10 @@ type replicatorProps struct {
 	// a {source => targets} map for the "replicate-to" annotation
 	targetsTo           map[string][]string
 
-	// a {source => namespaces} map for which namespaces are targeted
-	watchedNamespaces   map[string][]string
-	// a {source => patterns} for the patterns matched over the namespaces
-	patternNamespaces   map[string][]*regexp.Regexp
+	// a {source => targets} map for all the targeted objects
+	watchedTargets   map[string][]string
+	// a {source => targetPatterns} for all the targeted objects
+	watchedPatterns   map[string][]targetPattern
 }
 
 // Replicator describes the common interface that the secret and configmap
@@ -88,49 +88,46 @@ type Replicator interface {
 // Returns true if replication is allowed.
 // If replication is not allowed returns false with error message
 func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
-	if r.allowAll {
-		return true, nil
-	}
-
-	// make sure source object allows replication
 	annotationAllowed, ok := sourceObject.Annotations[ReplicationAllowed]
-	if !ok {
-		return false, fmt.Errorf("source %s/%s does not allow replication. %s will not be replicated",
-			sourceObject.Namespace, sourceObject.Name, object.Name)
+	annotationAllowedNs, okNs := sourceObject.Annotations[ReplicationAllowedNamespaces]
+	// unless allowAll, explicit permission is required
+	if !r.allowAll && !ok && !okNs {
+		return false, fmt.Errorf("source %s/%s does not explicitely allow replication",
+			sourceObject.Namespace, sourceObject.Name)
 	}
-	annotationAllowedBool, err := strconv.ParseBool(annotationAllowed)
-
-	// check if source object allows replication
-	if err != nil || !annotationAllowedBool {
-		return false, fmt.Errorf("source %s/%s does not allow replication. %s will not be replicated",
-			sourceObject.Namespace, sourceObject.Name, object.Name)
+	// check allow annotation
+	if ok {
+		if val, err := strconv.ParseBool(annotationAllowed); err != nil {
+			return false, fmt.Errorf("source %s/%s has illformed annotation %s (%s): %s",
+				sourceObject.Namespace, sourceObject.Name, ReplicationAllowed, annotationAllowed, err)
+		} else if !val {
+			return false, fmt.Errorf("source %s/%s explicitely disallow replication",
+				sourceObject.Namespace, sourceObject.Name)
+		}
 	}
-
-	// check if the target namespace is permitted
-	annotationAllowedNamespaces, ok := sourceObject.Annotations[ReplicationAllowedNamespaces]
-	if !ok {
-		return false, fmt.Errorf(
-			"source %s/%s does not allow replication in namespace %s. %s will not be replicated",
-			sourceObject.Namespace, sourceObject.Name, object.Namespace, object.Name)
-	}
-	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
-	allowed := false
-	for _, ns := range allowedNamespaces {
-		ns := strings.TrimSpace(ns)
-
-		if matched, _ := regexp.MatchString(ns, object.Namespace); matched {
-			allowed = true
-			break
+	// check allow-namespaces annotation
+	if okNs {
+		allowed := false
+		for _, ns := range strings.Split(annotationAllowedNs, ",") {
+			if ns == "" {
+			} else if validName.MatchString(ns) {
+				if ns == object.Namespace {
+					allowed = true
+				}
+			} else if ok, err := regexp.MatchString(`^(?:`+ns+`)$`, object.Namespace); ok {
+				allowed = true
+			} else if err != nil {
+				return false, fmt.Errorf("source %s/%s has compilation error on annotation %s (%s): %s",
+					sourceObject.Namespace, sourceObject.Name, ReplicationAllowedNamespaces, ns, err)
+			}
+		}
+		if !allowed {
+			return false, fmt.Errorf("source %s/%s does not allow replication to namespace %s",
+				sourceObject.Namespace, sourceObject.Name, object.Namespace)
 		}
 	}
 
-	err = nil
-	if !allowed {
-		err = fmt.Errorf(
-			"source %s/%s does not allow replication in namespace %s. %s will not be replicated",
-			sourceObject.Namespace, sourceObject.Name, object.Namespace, object.Name)
-	}
-	return allowed, err
+	return true, nil
 }
 
 // Checks that update is needed in annotations of the target and source objects
@@ -222,7 +219,7 @@ func (r *replicatorProps) isReplicatedBy(object *metav1.ObjectMeta, sourceObject
 // Checks if the object is replicated to the target
 // Returns an error only if the annotations are invalid
 func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject *metav1.ObjectMeta) (bool, error) {
-	targets, targetPatterns, _, err := r.getReplicationTargets(object)
+	targets, targetPatterns, err := r.getReplicationTargets(object)
 	if err != nil {
 		return false, err
 	}
@@ -250,22 +247,24 @@ func (r *replicatorProps) isReplicatedTo(object *metav1.ObjectMeta, targetObject
 // - targets: a slice of all fully qualified target. Items are unique, does not contain object itself
 // - targetPatterns: a slice of targetPattern, using regex to identify if a namespace is matched
 //                   two patterns can generate the same target, and even the object itself
-// - patterns: a slice of regexp patterns, used identify a namespace can be concerned by this source
-//             two patterns can match the same namespace
-func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]string, []targetPattern, []*regexp.Regexp, error) {
+func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]string, []targetPattern, error) {
 	annotationTo, okTo := object.Annotations[ReplicateToAnnotation]
 	annotationToNs, okToNs := object.Annotations[ReplicateToNamespacesAnnotation]
 	if !okTo && !okToNs {
-		return nil, nil, nil, nil
+		return nil, nil, nil
 	}
 
 	key := fmt.Sprintf("%s/%s", object.Name, object.Namespace)
 	targets := []string{}
 	targetPatterns := []targetPattern{}
-	patterns := []*regexp.Regexp{}
-	compiledPatterns := map[string]*regexp.Regexp{} // cache of patterns, to reuse them
-	seen := map[string]bool{key: true} // which qualified paths have already been seen
-	var names, namespaces, qualified map[string]bool // sets for names, namespaces, and qualified names
+	// cache of patterns, to reuse them as much as possible
+	compiledPatterns := map[string]*regexp.Regexp{}
+	for _, pattern := range r.watchedPatterns[key] {
+		compiledPatterns[pattern.namespace.String()] = pattern.namespace
+	}
+	// which qualified paths have already been seen (exclude the object itself)
+	seen := map[string]bool{key: true}
+	var names, namespaces, qualified map[string]bool
 	// no target explecitely provided, assumed that targets will have the same name
 	if !okTo {
 		names = map[string]bool{object.Name: true}
@@ -283,12 +282,12 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 				names[n] = true
 			// raise error
 			} else {
-				return nil, nil, nil, fmt.Errorf("source %s has invalid name on annotation %s (%s)",
+				return nil, nil, fmt.Errorf("source %s has invalid name on annotation %s (%s)",
 					key, ReplicateToAnnotation, n)
 			}
 		}
 	}
-	// no target namespace provided, assume that the namespace is the samed (or qualified in the name)
+	// no target namespace provided, assume that the namespace is the same (or qualified in the name)
 	if !okToNs {
 		namespaces = map[string]bool{object.Namespace: true}
 	// split the target namespaces
@@ -296,7 +295,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		namespaces = map[string]bool{}
 		for _, ns := range strings.Split(annotationToNs, ",") {
 			if strings.ContainsAny(ns, "/") {
-				return nil, nil, nil, fmt.Errorf("source %s has invalid namespace pattern on annotation %s (%s)",
+				return nil, nil, fmt.Errorf("source %s has invalid namespace pattern on annotation %s (%s)",
 					key, ReplicateToNamespacesAnnotation, ns)
 			} else if ns != "" {
 				namespaces[ns] = true
@@ -309,16 +308,15 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		if validName.MatchString(ns) {
 			ns = ns + "/"
 			for n := range names {
-				n = ns + n
-				if !seen[n] {
-					seen[n] = true
-					targets = append(targets, n)
+				full := ns + n
+				if !seen[full] {
+					seen[full] = true
+					targets = append(targets, full)
 				}
 			}
 		// this namespace is a pattern
 		} else if pattern, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
 			compiledPatterns[ns] = pattern
-			patterns = append(patterns, pattern)
 			ns = ns + "/"
 			for n := range names {
 				full := ns + n
@@ -329,7 +327,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 			}
 		// raise compilation error
 		} else {
-			return nil, nil, nil, fmt.Errorf("source %s has compilation error on annotation %s (%s): %s",
+			return nil, nil, fmt.Errorf("source %s has compilation error on annotation %s (%s): %s",
 				key, ReplicateToNamespacesAnnotation, ns, err)
 		}
 	}
@@ -338,11 +336,11 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		if seen[q] {
 		// check that there is exactly one "/"
 		} else if qs := strings.SplitN(q, "/", 3); len(qs) != 2 {
-			return nil, nil, nil, fmt.Errorf("source %s has invalid path on annotation %s (%s)",
+			return nil, nil, fmt.Errorf("source %s has invalid path on annotation %s (%s)",
 				key, ReplicateToAnnotation, q)
 		// check that the name part is valid
 		} else if n := qs[1]; !validName.MatchString(n) {
-			return nil, nil, nil, fmt.Errorf("source %s has invalid name on annotation %s (%s)",
+			return nil, nil, fmt.Errorf("source %s has invalid name on annotation %s (%s)",
 				key, ReplicateToAnnotation, n)
 		// check if the namespace is a pattern
 		} else if ns := qs[0]; validName.MatchString(ns) {
@@ -353,16 +351,15 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		// check that the pattern compiles
 		} else if pattern, err := regexp.Compile(`^(?:`+ns+`)$`); err == nil {
 			compiledPatterns[ns] = pattern
-			patterns = append(patterns, pattern)
 			targetPatterns = append(targetPatterns, targetPattern{pattern, n})
 		// raise compilation error
 		} else {
-			return nil, nil, nil, fmt.Errorf("source %s has compilation error on annotation %s (%s): %s",
+			return nil, nil, fmt.Errorf("source %s has compilation error on annotation %s (%s): %s",
 				key, ReplicateToAnnotation, ns, err)
 		}
 	}
 
-	return targets, targetPatterns, patterns, nil
+	return targets, targetPatterns, nil
 }
 
 // Returns an annotation as "namespace/name" format

@@ -3,7 +3,6 @@ package replicate
 import (
 	"fmt"
 	"log"
-	"regexp"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -20,15 +19,15 @@ var SecretActions *secretActions = &secretActions{}
 func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) Replicator {
 	repl := objectReplicator{
 		replicatorProps: replicatorProps{
-			Name:              "secret",
-			allowAll:          allowAll,
-			client:            client,
+			Name:            "secret",
+			allowAll:        allowAll,
+			client:          client,
 
-			targetsFrom:       make(map[string][]string),
-			targetsTo:         make(map[string][]string),
+			targetsFrom:     make(map[string][]string),
+			targetsTo:       make(map[string][]string),
 
-			watchedNamespaces: make(map[string][]string),
-			patternNamespaces: make(map[string][]*regexp.Regexp),
+			watchedTargets:  make(map[string][]string),
+			watchedPatterns: make(map[string][]targetPattern),
 		},
 		replicatorActions: SecretActions,
 	}
