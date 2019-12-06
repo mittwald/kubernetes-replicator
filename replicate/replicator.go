@@ -452,7 +452,7 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 			delete(r.targetsFrom, key)
 		}
 	}
-	// find which source want to replicate into this secret, now that they can
+	// find which source want to replicate into this object, now that they can
 	todo := map[string]bool{}
 
 	for source, watched := range r.watchedTargets {
@@ -487,7 +487,7 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 			delete(r.watchedTargets, source)
 			delete(r.watchedPatterns, source)
 
-		} else if ok, err := r.isReplicatedTo(sourceObject.(*metav1.ObjectMeta), meta); err != nil {
+		} else if ok, err := r.isReplicatedTo(r.getMeta(sourceObject), meta); err != nil {
 			log.Printf("could not parse %s %s: %s", r.Name, source, err)
 		// the source sitll want to be replicated, so let's do it
 		} else if ok {
