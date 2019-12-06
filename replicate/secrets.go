@@ -1,7 +1,6 @@
 package replicate
 
 import (
-	"fmt"
 	"log"
 	"time"
 
@@ -158,8 +157,9 @@ func (*secretActions) clear(r *replicatorProps, object interface{}) error {
 	return nil
 }
 
-func (*secretActions) install(r *replicatorProps, meta *metav1.ObjectMeta, sourceObject interface{}) error {
+func (*secretActions) install(r *replicatorProps, meta *metav1.ObjectMeta, sourceObject interface{}, fromObject interface{}) error {
 	sourceSecret := sourceObject.(*v1.Secret)
+
 	secret := v1.Secret{
 		Type: sourceSecret.Type,
 		TypeMeta: metav1.TypeMeta{
@@ -169,25 +169,20 @@ func (*secretActions) install(r *replicatorProps, meta *metav1.ObjectMeta, sourc
 		ObjectMeta: *meta,
 	}
 
-	if sourceSecret.Data != nil {
-		secret.Data = make(map[string][]byte)
-		for key, value := range sourceSecret.Data {
-			newValue := make([]byte, len(value))
-			copy(newValue, value)
-			secret.Data[key] = newValue
+	if fromObject != nil {
+		fromSecret := fromObject.(*v1.Secret)
+
+		if fromSecret.Data != nil {
+			secret.Data = make(map[string][]byte)
+			for key, value := range fromSecret.Data {
+				newValue := make([]byte, len(value))
+				copy(newValue, value)
+				secret.Data[key] = newValue
+			}
 		}
 	}
 
 	log.Printf("installing secret %s/%s", secret.Namespace, secret.Name)
-
-	secret.Annotations = map[string]string{}
-	secret.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
-	secret.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
-		sourceSecret.Namespace, sourceSecret.Name)
-	secret.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
-	if val, ok := sourceSecret.Annotations[ReplicateOnceVersionAnnotation]; ok {
-		secret.Annotations[ReplicateOnceVersionAnnotation] = val
-	}
 
 	var s *v1.Secret
 	var err error

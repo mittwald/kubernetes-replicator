@@ -13,7 +13,7 @@ import (
 )
 
 // pattern of a valid kubernetes name
-var validName = regexp.MustCompile(`^[0-9a-z.-]*$`)
+var validName = regexp.MustCompile(`^[0-9a-z.-]+$`)
 
 // a struct representing a pattern to match namespaces and generating targets
 type targetPattern struct {
@@ -133,7 +133,10 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 // Checks that update is needed in annotations of the target and source objects
 // Returns true if update is needed
 // If update is not needed returns false with error message
-func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta) (bool, error) {
+func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *metav1.ObjectMeta, interObject *metav1.ObjectMeta) (bool, error) {
+	if interObject == nil {
+		interObject = object
+	}
 	// target was "replicated" from a delete source, or never replicated
 	if targetVersion, ok := object.Annotations[ReplicatedFromVersionAnnotation]; !ok {
 		return true, nil
@@ -154,11 +157,11 @@ func (r *replicatorProps) needsUpdate(object *metav1.ObjectMeta, sourceObject *m
 		hasOnce = true
 	}
 	// no once annotation, nothing to check
-	if annotationOnce, ok := object.Annotations[ReplicateOnceAnnotation]; !ok {
+	if annotationOnce, ok := interObject.Annotations[ReplicateOnceAnnotation]; !ok {
 	// once annotation is not a boolean
 	} else if once, err := strconv.ParseBool(annotationOnce); err != nil {
 		return false, fmt.Errorf("target %s/%s has illformed annotation %s: %s",
-			object.Namespace, object.Name, ReplicateOnceAnnotation, err)
+			interObject.Namespace, interObject.Name, ReplicateOnceAnnotation, err)
 	// once annotation is present
 	} else if once {
 		hasOnce = true

@@ -5,6 +5,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +16,7 @@ type replicatorActions interface {
 	getMeta(object interface{}) *metav1.ObjectMeta
 	update(r *replicatorProps, object interface{}, sourceObject interface{}) error
 	clear(r *replicatorProps, object interface{}) error
-	install(r *replicatorProps, meta *metav1.ObjectMeta, sourceObject interface{}) error
+	install(r *replicatorProps, meta *metav1.ObjectMeta, sourceObject interface{}, fromObject interface{}) error
 	delete(r *replicatorProps, meta interface{}) error
 }
 
@@ -121,7 +122,7 @@ func (r *objectReplicator) replicateToNamespace(object interface{}, namespace st
 	for target := range existingTargets {
 		log.Printf("%s %s is replicated to %s", r.Name, key, target)
 		currentTargets = append(currentTargets, target)
-		r.installObject(target, nil, object)
+		r.installObject(target, nil, object, nil)
 	}
 	// update the current targets
 	r.targetsTo[key] = currentTargets
@@ -199,7 +200,7 @@ Targets:
 		}
 
 		if exists {
-			r.installObject("", object, sourceObject)
+			r.installObject("", object, sourceObject, nil)
 		} else {
 			r.doDeleteObject(object)
 		}
@@ -283,7 +284,7 @@ Targets:
 			// create all targets
 			for _, t := range(existingTargets) {
 				log.Printf("%s %s is replicated to %s", r.Name, key, t)
-				r.installObject(t, nil, object)
+				r.installObject(t, nil, object, nil)
 			}
 		}
 
@@ -300,7 +301,31 @@ func (r *objectReplicator) replicateObject(object interface{}, sourceObject  int
 		return err
 	}
 
-	if ok, err := r.needsUpdate(meta, sourceMeta); !ok {
+	if target, ok := meta.Annotations[ReplicateToAnnotation]; ok {
+		var err error
+
+		if !validName.MatchString(target) {
+			err = fmt.Errorf("%s %s/%s has invalid name on annotation %s (%s)",
+				r.Name, meta.Namespace, meta.Name, ReplicateToAnnotation, target)
+
+		} else if _, ok := meta.Annotations[ReplicateToNamespacesAnnotation]; ok {
+			err = fmt.Errorf("%s %s/%s has unexpected annotation %s with annotation %s",
+				r.Name, meta.Namespace, meta.Name, ReplicateToNamespacesAnnotation, ReplicateFromAnnotation)
+
+		} else if target != meta.Name {
+			target = fmt.Sprintf("%s/%s", meta.Namespace, target)
+			log.Printf("%s %s/%s is replicated from %s/%s",
+				r.Name, meta.Namespace, meta.Name, sourceMeta.Namespace, sourceMeta.Name)
+			return r.installObject(target, nil, object, sourceObject)
+		}
+
+		if err != nil {
+			log.Printf("%s", err)
+			return err
+		}
+	}
+
+	if ok, err := r.needsUpdate(meta, sourceMeta, nil); !ok {
 		log.Printf("replication of %s %s/%s is skipped: %s", r.Name, meta.Namespace, meta.Name, err)
 		return err
 	}
@@ -308,13 +333,32 @@ func (r *objectReplicator) replicateObject(object interface{}, sourceObject  int
 	return r.update(&r.replicatorProps, object, sourceObject)
 }
 
-func (r *objectReplicator) installObject(target string, targetObject interface{}, sourceObject interface{}) error {
+func (r *objectReplicator) installObject(target string, targetObject interface{}, sourceObject interface{}, fromObject interface{}) error {
 	var targetMeta *metav1.ObjectMeta
 	sourceMeta := r.getMeta(sourceObject)
 	var targetSplit []string
 
+	if fromObject != nil {
+	} else if val, ok := resolveAnnotation(sourceMeta, ReplicateFromAnnotation); ok {
+
+		if obj, exists, err := r.objectStore.GetByKey(val); err != nil {
+			log.Printf("could not get %s %s: %s", r.Name, val, err)
+			return err
+
+		} else if exists {
+			log.Printf("target of %s %s/%s is replicated from %s",
+				r.Name, sourceMeta.Namespace, sourceMeta.Name, val)
+			fromObject = obj
+
+		} else {
+			log.Printf("source %s %s deleted: clearing target of %s/%s",
+				r.Name, val, sourceMeta.Namespace, sourceMeta.Name)
+			sourceObject = nil
+		}
+	}
+
 	if targetObject == nil {
-		targetSplit = strings.SplitN(target, "/", 2)
+		targetSplit = strings.SplitN(target, "/", 3)
 
 		if len(targetSplit) != 2 {
 			err := fmt.Errorf("illformed annotation %s in %s %s/%s: expected namespace/name, got %s",
@@ -340,8 +384,18 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 		targetSplit = []string{targetMeta.Namespace, targetMeta.Name}
 	}
 
+	fromMeta := sourceMeta
+	if fromObject != nil {
+		fromMeta = r.getMeta(fromObject)
+	}
+
 	if targetMeta != nil {
-		if ok, err := r.needsUpdate(targetMeta, sourceMeta); !ok {
+		var interMeta *metav1.ObjectMeta
+		if fromObject != nil {
+			interMeta = sourceMeta
+		}
+
+		if ok, err := r.needsUpdate(targetMeta, fromMeta, interMeta); !ok {
 			log.Printf("replication of %s %s/%s is skipped: %s",
 				r.Name, sourceMeta.Namespace, sourceMeta.Name, err)
 			return err
@@ -354,11 +408,22 @@ func (r *objectReplicator) installObject(target string, targetObject interface{}
 		Annotations: map[string]string{},
 	}
 
+	copyMeta.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	copyMeta.Annotations[ReplicatedByAnnotation] = fmt.Sprintf("%s/%s",
+		sourceMeta.Namespace, sourceMeta.Name)
+	copyMeta.Annotations[ReplicatedFromVersionAnnotation] = fromMeta.ResourceVersion
+	if val, ok := fromMeta.Annotations[ReplicateOnceVersionAnnotation]; ok {
+		copyMeta.Annotations[ReplicateOnceVersionAnnotation] = val
+	}
+
 	if targetMeta != nil {
 		copyMeta.ResourceVersion = targetMeta.ResourceVersion
 	}
 
-	return r.install(&r.replicatorProps, &copyMeta, sourceObject)
+	if fromObject == nil {
+		fromObject = sourceObject
+	}
+	return r.install(&r.replicatorProps, &copyMeta, sourceMeta, fromObject)
 }
 
 func (r *objectReplicator) objectFromStore(key string) (interface{}, *metav1.ObjectMeta, error) {
@@ -487,12 +552,7 @@ func (r *objectReplicator) ObjectDeleted(object interface{}) {
 			log.Printf("could not parse %s %s: %s", r.Name, source, err)
 		// the source sitll want to be replicated, so let's do it
 		} else if ok {
-			copyMeta := metav1.ObjectMeta{
-				Namespace:   meta.Namespace,
-				Name:        meta.Name,
-				Annotations: map[string]string{},
-			}
-			r.install(&r.replicatorProps, &copyMeta, sourceObject)
+			r.installObject(key, nil, sourceObject, nil)
 			break
 		}
 	}
