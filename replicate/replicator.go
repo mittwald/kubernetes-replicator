@@ -181,7 +181,6 @@ Targets:
 	if val, ok := meta.Annotations[ReplicatedByAnnotation]; ok {
 		log.Printf("%s %s is replicated by %s", r.Name, key, val)
 		sourceObject, exists, err := r.objectStore.GetByKey(val)
-		sourceMeta := r.getMeta(sourceObject)
 
 		if err != nil {
 			log.Printf("could not get %s %s: %s", r.Name, val, err)
@@ -189,25 +188,22 @@ Targets:
 		// the source has been deleted, so should this object be
 		} else if !exists {
 			log.Printf("source %s %s deleted: deleting target %s", r.Name, val, key)
-			sourceMeta = nil
 
-		} else if ok, err := r.isReplicatedTo(sourceMeta, meta); err != nil {
+		} else if ok, err := r.isReplicatedTo(r.getMeta(sourceObject), meta); err != nil {
 			log.Printf("could not parse %s %s: %s", r.Name, val, err)
 			return
 		// the source annotations have changed, this replication is deleted
 		} else if !ok {
 			log.Printf("source %s %s is not replicated to %s: deleting target", r.Name, val, key)
-			sourceMeta = nil
+			exists = false
 		}
 
-		if sourceMeta == nil {
-			r.doDeleteObject(object)
-			return
-
-		} else {
+		if exists {
 			r.installObject("", object, sourceObject)
-			return
+		} else {
+			r.doDeleteObject(object)
 		}
+		return
 	}
 	// this object is replicated from another, update it
 	if val, ok := resolveAnnotation(meta, ReplicateFromAnnotation); ok {
