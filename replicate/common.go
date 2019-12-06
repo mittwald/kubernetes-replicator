@@ -17,32 +17,32 @@ var validName = regexp.MustCompile(`^[0-9a-z.-]*$`)
 
 // a struct representing a pattern to match namespaces and generating targets
 type targetPattern struct {
-	namesapce *regexp.Regexp
+	namespace *regexp.Regexp
 	name      string
 }
 // if the pattern matches the given target object
 func (pattern targetPattern) Match(object *metav1.ObjectMeta) bool {
-	return object.Name == pattern.name && pattern.namesapce.MatchString(object.Namespace)
+	return object.Name == pattern.name && pattern.namespace.MatchString(object.Namespace)
 }
 // if the pattern matches the given target path
 func (pattern targetPattern) MatchString(target string) bool {
 	parts := strings.SplitN(target, "/", 2)
-	return len(parts) == 2 && parts[1] == pattern.name && pattern.namesapce.MatchString(parts[0])
+	return len(parts) == 2 && parts[1] == pattern.name && pattern.namespace.MatchString(parts[0])
 }
 // if the pattern matches the given namespace, returns a target path in this namespace
 func (pattern targetPattern) MatchNamespace(namespace string) string {
-	if pattern.namesapce.MatchString(namespace) {
+	if pattern.namespace.MatchString(namespace) {
 		return fmt.Sprintf("%s/%s", namespace, pattern.name)
 	} else {
 		return ""
 	}
 }
-// returns a slice of targets paths in the given namesapces when matching
+// returns a slice of targets paths in the given namespaces when matching
 func (pattern targetPattern) Targets(namespaces []string) []string {
 	suffix := "/" + pattern.name
 	targets := []string{}
 	for _, ns := range namespaces {
-		if pattern.namesapce.MatchString(ns) {
+		if pattern.namespace.MatchString(ns) {
 			targets = append(targets, ns+suffix)
 		}
 	}
@@ -70,7 +70,7 @@ type replicatorProps struct {
 	// a {source => targets} map for the "replicate-to" annotation
 	targetsTo           map[string][]string
 
-	// a {source => namesapces} map for which namespaces are targeted
+	// a {source => namespaces} map for which namespaces are targeted
 	watchedNamespaces   map[string][]string
 	// a {source => patterns} for the patterns matched over the namespaces
 	patternNamespaces   map[string][]*regexp.Regexp
@@ -291,7 +291,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 	// no target namespace provided, assume that the namespace is the samed (or qualified in the name)
 	if !okToNs {
 		namespaces = map[string]bool{object.Namespace: true}
-	// split the target namesapces
+	// split the target namespaces
 	} else {
 		namespaces = map[string]bool{}
 		for _, ns := range strings.Split(annotationToNs, ",") {
@@ -344,7 +344,7 @@ func (r *replicatorProps) getReplicationTargets(object *metav1.ObjectMeta) ([]st
 		} else if n := qs[1]; !validName.MatchString(n) {
 			return nil, nil, nil, fmt.Errorf("source %s has invalid name on annotation %s (%s)",
 				key, ReplicateToAnnotation, n)
-		// check if the namesapce is a pattern
+		// check if the namespace is a pattern
 		} else if ns := qs[0]; validName.MatchString(ns) {
 			targets = append(targets, q)
 		// check if this pattern is already compiled

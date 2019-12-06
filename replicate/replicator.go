@@ -36,11 +36,13 @@ func (r *objectReplicator) Start() {
 
 func (r *objectReplicator) NamespaceAdded(object interface{}) {
 	namespace := object.(*v1.Namespace)
-	// find all the objects which want to replicate to that namesapce
+	fmt.Printf("NamespaceAdded: %s\n", namespace.Name)
+	// find all the objects which want to replicate to that namespace
 	todo := map[string]bool{}
 
 	for source, watched := range r.watchedNamespaces {
 		for _, ns := range watched {
+			fmt.Printf("watched: %s, %s: %s\n", source, ns, ns == namespace.Name)
 			if ns == namespace.Name {
 				todo[source] = true
 				break
@@ -54,6 +56,7 @@ func (r *objectReplicator) NamespaceAdded(object interface{}) {
 		}
 
 		for _, p := range patterns {
+			fmt.Printf("watched: %s, %s: %s\n", source, p, p.MatchString(namespace.Name))
 			if p.MatchString(namespace.Name) {
 				todo[source] = true
 				break
@@ -78,9 +81,10 @@ func (r *objectReplicator) NamespaceAdded(object interface{}) {
 	}
 }
 
-func (r *objectReplicator) objectWatchNamespace(object interface{}, namesapce string) {
+func (r *objectReplicator) objectWatchNamespace(object interface{}, namespace string) {
 	meta := r.getMeta(object)
 	key := fmt.Sprintf("%s/%s", meta.Namespace, meta.Name)
+	fmt.Printf("objectWatchNamespace: %s, %s\n", key, namespace)
 	// those annotations have priority
 	if _, ok := meta.Annotations[ReplicatedByAnnotation]; ok {
 		return
@@ -97,13 +101,15 @@ func (r *objectReplicator) objectWatchNamespace(object interface{}, namesapce st
 	existingTargets := map[string]bool{}
 
 	for _, target := range targets {
-		if namesapce == strings.SplitN(target, "/", 2)[0] {
+		fmt.Printf("target: %s, %s: %s\n", target, namespace, namespace == strings.SplitN(target, "/", 2)[0])
+		if namespace == strings.SplitN(target, "/", 2)[0] {
 			existingTargets[target] = true
 		}
 	}
 
 	for _, pattern := range targetPatterns {
-		if target := pattern.MatchNamespace(namesapce); target != "" {
+		fmt.Printf("pattern: %s, %s: %s\n", pattern.namespace, namespace, pattern.MatchNamespace(namespace))
+		if target := pattern.MatchNamespace(namespace); target != "" {
 			existingTargets[target] = true
 		}
 	}
