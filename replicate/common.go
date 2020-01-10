@@ -16,7 +16,7 @@ type replicatorProps struct {
 	controller cache.Controller
 	allowAll   bool
 
-	dependencyMap map[string][]string
+	dependencyMap map[string]map[string]interface{}
 }
 
 // Replicator describes the common interface that the secret and configmap
@@ -52,8 +52,8 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 	annotationAllowedNamespaces, ok := sourceObject.Annotations[ReplicationAllowedNamespaces]
 	if !ok {
 		return false, fmt.Errorf(
-			"source %s/%s does not allow replication in namespace %s. %s will not be replicated",
-			sourceObject.Namespace, sourceObject.Name, object.Namespace, object.Name)
+			"source %s/%s does not allow replication (%s annotation missing). %s will not be replicated",
+			sourceObject.Namespace, sourceObject.Name, ReplicationAllowedNamespaces, object.Name)
 	}
 	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
 	allowed := false
