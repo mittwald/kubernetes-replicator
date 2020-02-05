@@ -21,7 +21,7 @@ builds:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ .Env.TRAVIS_TAG }}-next"
+  name_template: "{{ .Env.TRAVIS_BRANCH }}-next"
 changelog:
   sort: asc
   filters:
@@ -34,8 +34,8 @@ dockers:
     image_templates:
     - quay.io/mittwald/kubernetes-replicator:latest
     - quay.io/mittwald/kubernetes-replicator:stable
-    - quay.io/mittwald/kubernetes-replicator:{{ .Env.TRAVIS_TAG }}
-    - quay.io/mittwald/kubernetes-replicator:{{ .Env.TRAVIS_TAG }}-go{{ .Env.GO_VERSION }}
+    - quay.io/mittwald/kubernetes-replicator:{{ .Env.TRAVIS_BRANCH }}
+    - quay.io/mittwald/kubernetes-replicator:{{ .Env.TRAVIS_BRANCH }}-go{{ .Env.GO_VERSION }}
     binaries:
       - kubernetes-replicator
     goos: linux
@@ -46,8 +46,8 @@ dockers:
     image_templates:
     - quay.io/mittwald/kubernetes-replicator-arm64:latest
     - quay.io/mittwald/kubernetes-replicator-arm64:stable
-    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Env.TRAVIS_TAG }}
-    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Env.TRAVIS_TAG }}-go{{ .Env.GO_VERSION }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Env.TRAVIS_BRANCH }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Env.TRAVIS_BRANCH }}-go{{ .Env.GO_VERSION }}
     binaries:
       - kubernetes-replicator
     goos: linux
@@ -58,8 +58,8 @@ dockers:
     image_templates:
     - quay.io/mittwald/kubernetes-replicator-armv5:latest
     - quay.io/mittwald/kubernetes-replicator-armv5:stable
-    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Env.TRAVIS_TAG }}
-    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Env.TRAVIS_TAG }}-go{{ .Env.GO_VERSION }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Env.TRAVIS_BRANCH }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Env.TRAVIS_BRANCH }}-go{{ .Env.GO_VERSION }}
     binaries:
       - kubernetes-replicator
     goos: linux
@@ -70,8 +70,8 @@ dockers:
     image_templates:
     - quay.io/mittwald/kubernetes-replicator-armv6:latest
     - quay.io/mittwald/kubernetes-replicator-armv6:stable
-    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Env.TRAVIS_TAG }}
-    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Env.TRAVIS_TAG }}-go{{ .Env.GO_VERSION }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Env.TRAVIS_BRANCH }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Env.TRAVIS_BRANCH }}-go{{ .Env.GO_VERSION }}
     binaries:
       - kubernetes-replicator
     goos: linux
@@ -82,8 +82,8 @@ dockers:
     image_templates:
     - quay.io/mittwald/kubernetes-replicator-armv7:latest
     - quay.io/mittwald/kubernetes-replicator-armv7:stable
-    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Env.TRAVIS_TAG }}
-    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Env.TRAVIS_TAG }}-go{{ .Env.GO_VERSION }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Env.TRAVIS_BRANCH }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Env.TRAVIS_BRANCH }}-go{{ .Env.GO_VERSION }}
     binaries:
       - kubernetes-replicator
     goos: linux
