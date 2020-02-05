@@ -21,6 +21,7 @@ script:
 before_deploy:
   - if [[ -n "${DOCKER_LOGIN_USERNAME}" ]] && [[ -n "${DOCKER_LOGIN_PASSWORD}" ]] && [[ -n "${DOCKER_LOGIN_URL}" ]]; then docker login -u "${DOCKER_LOGIN_USERNAME}" -p "${DOCKER_LOGIN_PASSWORD}" "${DOCKER_LOGIN_URL}"; fi
   - export FULL_IMAGE="${DOCKER_LOGIN_URL}/mittwald/kubernetes-replicator"
+  - [[ -z "${TRAVIS_TAG}" ]] && export TRAVIS_TAG="${TRAVIS_BRANCH}"
 deploy:
   - provider: script
     skip_cleanup: true
