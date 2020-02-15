@@ -85,6 +85,12 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 	if len(v) < 2 {
 		return
 	}
+	
+	if _, ok := r.dependencyMap[val]; !ok {
+		r.dependencyMap[val] = make(map[string]interface{})
+	}
+
+	r.dependencyMap[val][secretKey] = nil
 
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
@@ -94,12 +100,6 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 		log.Printf("could not get secret %s: does not exist", val)
 		return
 	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make(map[string]interface{})
-	}
-
-	r.dependencyMap[val][secretKey] = nil
 
 	sourceSecret := sourceObject.(*v1.Secret)
 
