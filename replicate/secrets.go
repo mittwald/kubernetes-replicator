@@ -85,7 +85,7 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 	if len(v) < 2 {
 		return
 	}
-	
+
 	if _, ok := r.dependencyMap[val]; !ok {
 		r.dependencyMap[val] = make(map[string]interface{})
 	}

@@ -91,7 +91,7 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 	}
 
 	r.dependencyMap[val][configMapKey] = nil
-	
+
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
 		log.Printf("could not get config map %s: %s", val, err)
