@@ -75,12 +75,3 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 	}
 	return allowed, err
 }
-
-func isItemInList(itemList []string, key string) bool {
-	for _, value := range itemList {
-		if value == key {
-			return true
-		}
-	}
-	return false
-}

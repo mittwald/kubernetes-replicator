@@ -27,7 +27,7 @@ func NewRoleReplicator(client kubernetes.Interface, resyncPeriod time.Duration, 
 		replicatorProps: replicatorProps{
 			allowAll:      allowAll,
 			client:        client,
-			dependencyMap: make(map[string][]string),
+			dependencyMap: make(map[string]map[string]interface{}),
 		},
 	}
 
@@ -86,6 +86,12 @@ func (r *roleReplicator) RoleAdded(obj interface{}) {
 		return
 	}
 
+	if _, ok := r.dependencyMap[val]; !ok {
+		r.dependencyMap[val] = make(map[string]interface{})
+	}
+
+	r.dependencyMap[val][roleKey] = nil
+
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
 		log.Printf("could not get role %s: %s", val, err)
@@ -93,13 +99,6 @@ func (r *roleReplicator) RoleAdded(obj interface{}) {
 	} else if !exists {
 		log.Printf("could not get role %s: does not exist", val)
 		return
-	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-	if !isItemInList(r.dependencyMap[val], roleKey) {
-		r.dependencyMap[val] = append(r.dependencyMap[val], roleKey)
 	}
 
 	sourceRole := sourceObject.(*rbacv1.Role)
@@ -159,8 +158,8 @@ func (r *roleReplicator) roleFromStore(key string) (*rbacv1.Role, error) {
 	return role, nil
 }
 
-func (r *roleReplicator) updateDependents(role *rbacv1.Role, dependents []string) error {
-	for _, dependentKey := range dependents {
+func (r *roleReplicator) updateDependents(role *rbacv1.Role, dependents map[string]interface{}) error {
+	for dependentKey := range dependents {
 		log.Printf("updating dependent role %s/%s -> %s", role.Namespace, role.Name, dependentKey)
 
 		targetObject, exists, err := r.store.GetByKey(dependentKey)
@@ -190,7 +189,7 @@ func (r *roleReplicator) RoleDeleted(obj interface{}) {
 		return
 	}
 
-	for _, dependentKey := range replicas {
+	for dependentKey := range replicas {
 		targetRole, err := r.roleFromStore(dependentKey)
 		if err != nil {
 			log.Printf("could not load dependent role: %s", err)

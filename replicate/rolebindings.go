@@ -27,7 +27,7 @@ func NewRoleBindingReplicator(client kubernetes.Interface, resyncPeriod time.Dur
 		replicatorProps: replicatorProps{
 			allowAll:      allowAll,
 			client:        client,
-			dependencyMap: make(map[string][]string),
+			dependencyMap: make(map[string]map[string]interface{}),
 		},
 	}
 
@@ -86,6 +86,12 @@ func (r *roleBindingReplicator) RoleBindingAdded(obj interface{}) {
 		return
 	}
 
+	if _, ok := r.dependencyMap[val]; !ok {
+		r.dependencyMap[val] = make(map[string]interface{})
+	}
+
+	r.dependencyMap[val][roleBindingKey] = nil
+
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
 		log.Printf("could not get roleBinding %s: %s", val, err)
@@ -95,25 +101,9 @@ func (r *roleBindingReplicator) RoleBindingAdded(obj interface{}) {
 		return
 	}
 
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-	if !isItemInList(r.dependencyMap[val], roleBindingKey) {
-		r.dependencyMap[val] = append(r.dependencyMap[val], roleBindingKey)
-	}
-
 	sourceRole := sourceObject.(*rbacv1.RoleBinding)
 
 	r.replicateRoleBinding(roleBinding, sourceRole)
-}
-
-func isRoleBindingInList(itemList []string, key string) bool {
-	for _, value := range itemList {
-		if value == key {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *roleBindingReplicator) replicateRoleBinding(roleBinding *rbacv1.RoleBinding, sourceRole *rbacv1.RoleBinding) error {
@@ -167,8 +157,8 @@ func (r *roleBindingReplicator) roleBindingFromStore(key string) (*rbacv1.RoleBi
 	return roleBinding, nil
 }
 
-func (r *roleBindingReplicator) updateDependents(roleBinding *rbacv1.RoleBinding, dependents []string) error {
-	for _, dependentKey := range dependents {
+func (r *roleBindingReplicator) updateDependents(roleBinding *rbacv1.RoleBinding, dependents map[string]interface{}) error {
+	for dependentKey := range dependents {
 		log.Printf("updating dependent roleBinding %s/%s -> %s", roleBinding.Namespace, roleBinding.Name, dependentKey)
 
 		targetObject, exists, err := r.store.GetByKey(dependentKey)
@@ -198,7 +188,7 @@ func (r *roleBindingReplicator) RoleBindingDeleted(obj interface{}) {
 		return
 	}
 
-	for _, dependentKey := range replicas {
+	for dependentKey := range replicas {
 		targetRole, err := r.roleBindingFromStore(dependentKey)
 		if err != nil {
 			log.Printf("could not load dependent roleBinding: %s", err)
