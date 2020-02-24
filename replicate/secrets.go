@@ -27,7 +27,7 @@ func NewSecretReplicator(client kubernetes.Interface, resyncPeriod time.Duration
 		replicatorProps: replicatorProps{
 			allowAll:      allowAll,
 			client:        client,
-			dependencyMap: make(map[string][]string),
+			dependencyMap: make(map[string]map[string]interface{}),
 		},
 	}
 
@@ -86,6 +86,12 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 		return
 	}
 
+	if _, ok := r.dependencyMap[val]; !ok {
+		r.dependencyMap[val] = make(map[string]interface{})
+	}
+
+	r.dependencyMap[val][secretKey] = nil
+
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
 		log.Printf("could not get secret %s: %s", val, err)
@@ -94,12 +100,6 @@ func (r *secretReplicator) SecretAdded(obj interface{}) {
 		log.Printf("could not get secret %s: does not exist", val)
 		return
 	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-
-	r.dependencyMap[val] = append(r.dependencyMap[val], secretKey)
 
 	sourceSecret := sourceObject.(*v1.Secret)
 
@@ -165,8 +165,8 @@ func (r *secretReplicator) secretFromStore(key string) (*v1.Secret, error) {
 	return secret, nil
 }
 
-func (r *secretReplicator) updateDependents(secret *v1.Secret, dependents []string) error {
-	for _, dependentKey := range dependents {
+func (r *secretReplicator) updateDependents(secret *v1.Secret, dependents map[string]interface{}) error {
+	for dependentKey := range dependents {
 		log.Printf("updating dependent secret %s/%s -> %s", secret.Namespace, secret.Name, dependentKey)
 
 		targetObject, exists, err := r.store.GetByKey(dependentKey)
@@ -196,7 +196,7 @@ func (r *secretReplicator) SecretDeleted(obj interface{}) {
 		return
 	}
 
-	for _, dependentKey := range replicas {
+	for dependentKey := range replicas {
 		targetSecret, err := r.secretFromStore(dependentKey)
 		if err != nil {
 			log.Printf("could not load dependent secret: %s", err)

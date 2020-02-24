@@ -27,7 +27,7 @@ func NewConfigMapReplicator(client kubernetes.Interface, resyncPeriod time.Durat
 		replicatorProps: replicatorProps{
 			allowAll:      allowAll,
 			client:        client,
-			dependencyMap: make(map[string][]string),
+			dependencyMap: make(map[string]map[string]interface{}),
 		},
 	}
 
@@ -86,6 +86,12 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 		return
 	}
 
+	if _, ok := r.dependencyMap[val]; !ok {
+		r.dependencyMap[val] = make(map[string]interface{})
+	}
+
+	r.dependencyMap[val][configMapKey] = nil
+
 	sourceObject, exists, err := r.store.GetByKey(val)
 	if err != nil {
 		log.Printf("could not get config map %s: %s", val, err)
@@ -94,12 +100,6 @@ func (r *configMapReplicator) ConfigMapAdded(obj interface{}) {
 		log.Printf("could not get config map %s: does not exist", val)
 		return
 	}
-
-	if _, ok := r.dependencyMap[val]; !ok {
-		r.dependencyMap[val] = make([]string, 0, 1)
-	}
-
-	r.dependencyMap[val] = append(r.dependencyMap[val], configMapKey)
 
 	sourceConfigMap := sourceObject.(*v1.ConfigMap)
 
@@ -170,8 +170,8 @@ func (r *configMapReplicator) configMapFromStore(key string) (*v1.ConfigMap, err
 	return configMap, nil
 }
 
-func (r *configMapReplicator) updateDependents(configMap *v1.ConfigMap, dependents []string) error {
-	for _, dependentKey := range dependents {
+func (r *configMapReplicator) updateDependents(configMap *v1.ConfigMap, dependents map[string]interface{}) error {
+	for dependentKey := range dependents {
 		log.Printf("updating dependent config map %s/%s -> %s", configMap.Namespace, configMap.Name, dependentKey)
 
 		targetObject, exists, err := r.store.GetByKey(dependentKey)
@@ -201,7 +201,7 @@ func (r *configMapReplicator) ConfigMapDeleted(obj interface{}) {
 		return
 	}
 
-	for _, dependentKey := range replicas {
+	for dependentKey := range replicas {
 		targetConfigMap, err := r.configMapFromStore(dependentKey)
 		if err != nil {
 			log.Printf("could not load dependent config map: %s", err)
