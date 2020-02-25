@@ -53,21 +53,13 @@ func main() {
 	roleRepl := replicate.NewRoleReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleBindingRepl := replicate.NewRoleBindingReplicator(client, f.ResyncPeriod, f.AllowAll)
 
-	go func() {
-		secretRepl.Run()
-	}()
+	go secretRepl.Run()
 
-	go func() {
-		configMapRepl.Run()
-	}()
+	go configMapRepl.Run()
 
-	go func() {
-		roleRepl.Run()
-	}()
+	go roleRepl.Run()
 
-	go func() {
-		roleBindingRepl.Run()
-	}()
+	go roleBindingRepl.Run()
 
 	h := liveness.Handler{
 		Replicators: []replicate.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl},
