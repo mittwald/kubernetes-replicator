@@ -3,40 +3,44 @@ kind: Deployment
 metadata:
   name: {{ include "kubernetes-replicator.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-    helm.sh/chart: {{ include "kubernetes-replicator.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "kubernetes-replicator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- include "kubernetes-replicator.selectorLabels" . | nindent 8 }}
     spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ include "kubernetes-replicator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: health
               containerPort: 9102
-          readinessProbe:
+              protocol: TCP
+          livenessProbe:
             httpGet:
               path: /healthz
               port: health
-          livenessProbe:
+          readinessProbe:
             httpGet:
               path: /healthz
               port: health
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      serviceAccountName: {{ include "kubernetes-replicator.fullname" . }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

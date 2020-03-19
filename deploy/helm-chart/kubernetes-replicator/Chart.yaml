@@ -1,6 +1,13 @@
+# apiVersion will be set to v2 as soon as Github Workflows supports Helmv2 Charts
+# https://github.com/mittwald/helm-charts/blob/master/README.md#limitations
 apiVersion: v1
-appVersion: "1.0.0-alpha1"
-description: Controller for replicating secrets+configmaps across namespaces
 name: kubernetes-replicator
-version: 0.1.0
-url: https://github.com/mittwald/kubernetes-replicator
+description: Controller for replicating secrets+configmaps across namespaces
+
+# type will be set to soon as Github Workflows supports Helmv2 Charts
+# https://github.com/mittwald/helm-charts/blob/master/README.md#limitations
+#type: application
+
+version: 0.2.0
+
+appVersion: v2.2.2
