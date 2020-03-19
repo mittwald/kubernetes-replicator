@@ -2,6 +2,10 @@
 
 set -e
 
+if [[ -n "${DEBUG}" ]]; then
+    set -x
+fi
+
 ## make this script a bit more re-usable
 GIT_REPOSITORY="github.com/mittwald/kubernetes-replicator.git"
 CHART_YAML="./deploy/helm-chart/kubernetes-replicator/Chart.yaml"
