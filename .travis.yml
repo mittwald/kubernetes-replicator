@@ -1,5 +1,9 @@
 language: go
 
+dist: bionic
+
+os: linux
+
 go:
   - '1.12'
 
@@ -32,7 +36,7 @@ before_deploy:
   - export FULL_IMAGE="${DOCKER_LOGIN_URL}/mittwald/kubernetes-replicator"
 deploy:
   - provider: script
-    skip_cleanup: true
+    cleanup: false
     script: >-
       curl -sL https://git.io/goreleaser | bash -s -- --snapshot --skip-publish --rm-dist &&
       docker push "${FULL_IMAGE}:latest" &&
@@ -45,7 +49,7 @@ deploy:
       branch: master
       condition: $TRAVIS_OS_NAME = linux
   - provider: script
-    skip_cleanup: true
+    cleanup: false
     script: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
     on:
       tags: true
