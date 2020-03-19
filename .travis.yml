@@ -29,6 +29,7 @@ script:
   - /tmp/helm template ./deploy/helm-chart/kubernetes-replicator/.
   - /tmp/helm lint ./deploy/helm-chart/kubernetes-replicator/
   - curl -sL https://git.io/goreleaser | bash -s -- --snapshot --skip-publish --rm-dist
+  - bash ./scripts/bump-app-version.sh
 
 before_deploy:
   - docker login -u "${DOCKER_LOGIN_USERNAME}" -p "${DOCKER_LOGIN_PASSWORD}" "${DOCKER_LOGIN_URL}"

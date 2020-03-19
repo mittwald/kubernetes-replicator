@@ -36,10 +36,12 @@ git status
 ## stage changes
 git commit -m "Bump appVersion to '${TRAVIS_TAG}'"
 
+## rebase
+git pull --rebase publisher master
+
 if [[ "${1}" == "publish" ]]; then
 
     ## publish changes
-    git pull --rebase publisher master
     git push publisher master
 
     ## trigger helm-chart reload
