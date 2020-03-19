@@ -1,5 +1,3 @@
-replicaCount: 1
-
 image:
   repository: quay.io/mittwald/kubernetes-replicator
   #tag: stable # if no tag is given, the chart's appVersion is used

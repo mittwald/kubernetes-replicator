@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: 1
   selector:
     matchLabels:
       {{- include "kubernetes-replicator.selectorLabels" . | nindent 6 }}
