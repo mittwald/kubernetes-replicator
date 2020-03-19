@@ -19,8 +19,10 @@ secrets and config maps available in multiple namespaces.
 
 ### Using Helm
 
+1. [Add the Mittwald-Charts Repo](https://github.com/mittwald/helm-charts/blob/master/README.md#usage)
+
 ```shellsession
-$ helm upgrade --install kubernetes-replicator ./deploy/helm-chart/kubernetes-replicator
+$ helm upgrade --install kubernetes-replicator mittwald/kubernetes-replicator
 ```
 
 ### Manual
