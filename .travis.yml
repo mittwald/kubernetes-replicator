@@ -19,7 +19,6 @@ env:
     - CGO_ENABLED=0
     - GO_VERSION=1.12
     - HELM_VERSION=v3.1.2
-    - secure: "VNMhL0rwbAaiTV3YrERYSN57/EsMbtp6QET0cN0O4LSWlt0SRDBIeKXnL+Ex3Q7BMY+++DPovW4jZcIVnKyKvH5oGCgJ9Ilj6/Vk9GRKuyu5X+XQi4CuY9f70fz5gCb5ESpeLP9LD12Q6tsNrfRVO+zJiqyvjkZJYZAeTOZmL8szoJIDK83foRmVvwGdTQEK6Pq5fnaNXePcDqgywApDu9QMrab6HcoxZ/TZ99sJP7OEZTQIitdjfTQkol8bx34KT9NUvtd1nvMdcXAWaKyraFr4hJJEYIyB9b3rTtHemKQUhaQm3lrvuy0ns8wqNVyGV9u9qSPdtrL0rqdllw3xm3s5Azg7F+cnVBLyUebG/t5QpAipPeknkRKaicbAyjEZJUIrSLyVma1KQo82btmX/CeFlfS2tyNq9OtOfHouYxdrry8FtMH2DlUkFjHpry5E+FYBldUYDh6HGLYpXuk5JJkx5Td3DL2cqJHpYi6OjcENNESsFkg2ONGW6X3fu7khIkpBrnLMeWwGKlnwn2SVuvcfB/mBKK93Rknm2RdJGEYuOazidRjxRvl9y1oEwerx0SaQH5/uI/QwPN0ksVEiXVXD/C/Djp6nBptxnJdXPBl5gqZsSQ2Qd9JVN2B1oXb1wgHBcIO8ikmuKG8/32IJpFeOCSnkYVEjKSVqQ1MtQhs="
 
 install:
   - wget https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -O /tmp/helm.tar.gz
