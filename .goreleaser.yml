@@ -20,7 +20,7 @@ builds:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ .Env.TRAVIS_BRANCH }}-next"
+  name_template: "{{ .Tag }}-next"
 changelog:
   sort: asc
   filters:
