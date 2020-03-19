@@ -29,6 +29,7 @@ script:
   - /tmp/helm template ./deploy/helm-chart/kubernetes-replicator/.
   - /tmp/helm lint ./deploy/helm-chart/kubernetes-replicator/
   - curl -sL https://git.io/goreleaser | bash -s -- --snapshot --skip-publish --rm-dist
+  - bash -x ./scripts/bump-app-version.sh
 
 before_deploy:
   - docker login -u "${DOCKER_LOGIN_USERNAME}" -p "${DOCKER_LOGIN_PASSWORD}" "${DOCKER_LOGIN_URL}"
@@ -51,20 +52,7 @@ deploy:
     cleanup: false
     script: >-
       curl -sL https://git.io/goreleaser | bash -s -- --rm-dist &&
-      git config --global user.name "Mittwald Machine" &&
-      git config --global user.email "opensource@mittwald.de" &&
-      git remote add publisher https://mittwald-machine:${GITHUB_TOKEN}@github.com/mittwald/kubernetes-replicator.git &&
-      git reset --hard origin/master &&
-      git checkout master &&
-      git pull &&
-      sed -i "s#appVersion:.*#appVersion: ${TRAVIS_TAG}#g" ./deploy/helm-chart/kubernetes-replicator/Chart.yaml &&
-      git add ./deploy/helm-chart/kubernetes-replicator/Chart.yaml &&
-      git commit -m "Bump appVersion to '${TRAVIS_TAG}'" &&
-      git pull --rebase publisher master &&
-      git push publisher master &&
-      curl -X POST 'https://api.github.com/repos/mittwald/helm-charts/dispatches'
-      -u mittwald-machine:${GITHUB_TOKEN}
-      -d '{"event_type": "updateCharts"}'
+      bash ./scripts/bump-app-version.sh
     on:
       tags: true
       condition: $TRAVIS_OS_NAME = linux
