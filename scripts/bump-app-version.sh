@@ -15,6 +15,18 @@ CHART_YAML="./deploy/helm-chart/kubernetes-replicator/Chart.yaml"
 TRAVIS_TAG="${TRAVIS_TAG:-v0.0.0}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-dummy}"
 
+## temp working vars
+TIMESTAMP="$(date +%s )"
+TMP_DIR="/tmp/${TIMESTAMP}"
+
+## set up Git-User
+git config --global user.name "Mittwald Machine"
+git config --global user.email "opensource@mittwald.de"
+
+## temporary clone git repository
+git clone "https://${GIT_REPOSITORY}" "${TMP_DIR}"
+cd "${TMP_DIR}"
+
 ## replace appVersion
 sed -i "s#appVersion:.*#appVersion: ${TRAVIS_TAG}#g" "${CHART_YAML}"
 
@@ -24,15 +36,11 @@ sed -i "s#version:.*#version: ${TRAVIS_TAG/v/}#g" "${CHART_YAML}"
 ## useful for debugging purposes
 git status
 
-## set up Git-User
-git config --global user.name "Mittwald Machine"
-git config --global user.email "opensource@mittwald.de"
-
 ## Add new remote with credentials baked in url
 git remote add publisher "https://mittwald-machine:${GITHUB_TOKEN}@${GIT_REPOSITORY}"
 
 ## add and commit changed file
-git add "${CHART_YAML}"
+git add -A
 
 ## useful for debugging purposes
 git status
