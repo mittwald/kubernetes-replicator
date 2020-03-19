@@ -2,6 +2,7 @@
 
 set -e
 
+## debug if desired
 if [[ -n "${DEBUG}" ]]; then
     set -x
 fi
@@ -14,13 +15,16 @@ CHART_YAML="./deploy/helm-chart/kubernetes-replicator/Chart.yaml"
 TRAVIS_TAG="${TRAVIS_TAG:-v0.0.0}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-dummy}"
 
-## Replace app-version
+## replace appVersion
 sed -i "s#appVersion:.*#appVersion: ${TRAVIS_TAG}#g" "${CHART_YAML}"
 
-## Useful for debugging purposes
+## replace chart version with current tag without 'v'-prefix
+sed -i "s#version:.*#version: ${TRAVIS_TAG/v/}#g" "${CHART_YAML}"
+
+## useful for debugging purposes
 git status
 
-## Set up Git-User
+## set up Git-User
 git config --global user.name "Mittwald Machine"
 git config --global user.email "opensource@mittwald.de"
 
@@ -44,7 +48,7 @@ if [[ "${1}" == "publish" ]]; then
     ## publish changes
     git push publisher master
 
-    ## trigger helm-chart reload
+    ## trigger helm-charts reload
     curl -X POST 'https://api.github.com/repos/mittwald/helm-charts/dispatches' -u "mittwald-machine:${GITHUB_TOKEN}" -d '{"event_type": "updateCharts"}'
 
 fi
