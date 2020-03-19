@@ -1,29 +1,35 @@
+{{- if .Values.serviceAccount.create -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kubernetes-replicator.serviceAccountName" . }}
+  labels:
+    {{- include "kubernetes-replicator.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ include "kubernetes-replicator.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-    helm.sh/chart: {{ include "kubernetes-replicator.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 rules:
-- apiGroups: [""] # "" indicates the core API group
-  resources: ["secrets", "configmaps"]
-  verbs: ["get", "watch", "list", "update", "patch"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["roles", "rolebindings"]
-  verbs: ["get", "watch", "list", "update", "patch"]
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "watch", "list", "update", "patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "watch", "list", "update", "patch"]
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ include "kubernetes-replicator.fullname" . }}
   labels:
-    app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-    helm.sh/chart: {{ include "kubernetes-replicator.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 roleRef:
   kind: ClusterRole
   name: {{ include "kubernetes-replicator.fullname" . }}
@@ -31,14 +37,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "kubernetes-replicator.fullname" . }}
-    namespace: {{ .Release.Namespace }}
----
-kind: ServiceAccount
-apiVersion: v1
-metadata:
-  name: {{ include "kubernetes-replicator.fullname" . }}
-  labels:
-    app.kubernetes.io/name: {{ include "kubernetes-replicator.name" . }}
-    helm.sh/chart: {{ include "kubernetes-replicator.chart" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    namespace: {{ .Release.Namespace | quote }}
+{{- end -}}
