@@ -7,6 +7,10 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+args: []
+  # - -resync-period=30m
+  # - -allow-all=false
+
 serviceAccount:
   create: true
   annotations: {}
