@@ -1,6 +1,6 @@
 # ConfigMap & Secret replication for Kubernetes
 
-[![Build Status](https://travis-ci.org/mittwald/kubernetes-replicator.svg?branch=master)](https://travis-ci.org/mittwald/kubernetes-replicator)
+![Build Status](https://img.shields.io/github/workflow/status/mittwald/kubernetes-replicator/Compile & Test)
 
 This repository contains a custom Kubernetes controller that can be used to make
 secrets and config maps available in multiple namespaces.
