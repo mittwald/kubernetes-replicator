@@ -30,3 +30,6 @@ jobs:
         env:
           GIT_TAG_NAME: ${{ steps.tagName.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.RELEASE_USER_TOKEN }}
+          RELEASE_USER: ${{ secrets.RELEASE_USER }}
+          RELEASE_USER_NAME: ${{ secrets.RELEASE_USER_NAME }}
+          RELEASE_USER_EMAIL: ${{ secrets.RELEASE_USER_EMAIL }}
