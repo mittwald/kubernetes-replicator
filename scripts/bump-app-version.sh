@@ -12,7 +12,7 @@ GIT_REPOSITORY="github.com/mittwald/kubernetes-replicator.git"
 CHART_YAML="./deploy/helm-chart/kubernetes-replicator/Chart.yaml"
 
 ## avoid noisy shellcheck warnings
-TRAVIS_TAG="${TRAVIS_TAG:-v0.0.0}"
+GIT_TAG_NAME="${GIT_TAG_NAME:-v0.0.0}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-dummy}"
 
 ## temp working vars
@@ -28,10 +28,10 @@ git clone "https://${GIT_REPOSITORY}" "${TMP_DIR}"
 cd "${TMP_DIR}"
 
 ## replace appVersion
-sed -i "s#appVersion:.*#appVersion: ${TRAVIS_TAG}#g" "${CHART_YAML}"
+sed -i "s#appVersion:.*#appVersion: ${GIT_TAG_NAME}#g" "${CHART_YAML}"
 
 ## replace chart version with current tag without 'v'-prefix
-sed -i "s#version:.*#version: ${TRAVIS_TAG/v/}#g" "${CHART_YAML}"
+sed -i "s#version:.*#version: ${GIT_TAG_NAME/v/}#g" "${CHART_YAML}"
 
 ## useful for debugging purposes
 git status
@@ -46,7 +46,7 @@ git add -A
 git status
 
 ## stage changes
-git commit -m "Bump appVersion to '${TRAVIS_TAG}'"
+git commit -m "Bump appVersion to '${GIT_TAG_NAME}'"
 
 ## rebase
 git pull --rebase publisher master

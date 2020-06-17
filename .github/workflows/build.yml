@@ -1,0 +1,44 @@
+name: Compile & Test
+
+on: [push, pull_request]
+jobs:
+  verify_helm:
+    name: Verify Helm chart
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        helm: [ '3.1.2' ]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Helm
+        run: |
+          wget https://get.helm.sh/helm-v${{ matrix.helm }}-linux-amd64.tar.gz -O /tmp/helm.tar.gz
+          tar xzf /tmp/helm.tar.gz -C /tmp --strip-components=1
+          chmod +x /tmp/helm
+
+      - name: Test template rendering
+        run: /tmp/helm template ./deploy/helm-chart/kubernetes-replicator/.
+
+      - name: Lint chart
+        run: /tmp/helm lint ./deploy/helm-chart/kubernetes-replicator/
+
+  build:
+    name: Compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.14
+
+      - name: Compile
+        run: go build .
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run unit tests
+        run: go test ./...
