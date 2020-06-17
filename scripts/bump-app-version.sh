@@ -20,8 +20,8 @@ TIMESTAMP="$(date +%s )"
 TMP_DIR="/tmp/${TIMESTAMP}"
 
 ## set up Git-User
-git config --global user.name "Mittwald Machine"
-git config --global user.email "opensource@mittwald.de"
+git config --global user.name "${RELEASE_USER_NAME}"
+git config --global user.email "${RELEASE_USER_EMAIL}"
 
 ## temporary clone git repository
 git clone "https://${GIT_REPOSITORY}" "${TMP_DIR}"
@@ -57,7 +57,7 @@ if [[ "${1}" == "publish" ]]; then
     git push publisher master
 
     ## trigger helm-charts reload
-    curl -X POST 'https://api.github.com/repos/mittwald/helm-charts/dispatches' -u "mittwald-machine:${GITHUB_TOKEN}" -d '{"event_type": "updateCharts"}'
+    curl -X POST 'https://api.github.com/repos/mittwald/helm-charts/dispatches' -u "${RELEASE_USER}:${GITHUB_TOKEN}" -d '{"event_type": "updateCharts"}'
 
 fi
 
