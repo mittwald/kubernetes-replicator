@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -127,16 +128,32 @@ func (r *secretReplicator) replicateSecret(secret *v1.Secret, sourceSecret *v1.S
 		secretCopy.Data = make(map[string][]byte)
 	}
 
+	prevKeys, hasPrevKeys := previouslyPresentKeys(&secretCopy.ObjectMeta)
+	replicatedKeys := make([]string, 0)
+
 	for key, value := range sourceSecret.Data {
 		newValue := make([]byte, len(value))
 		copy(newValue, value)
 		secretCopy.Data[key] = newValue
+
+		replicatedKeys = append(replicatedKeys, key)
+		delete(prevKeys, key)
 	}
+
+	if hasPrevKeys {
+		for k := range prevKeys {
+			log.Printf("removing previously present key %s: not present in source secret any more", k)
+			delete(secretCopy.Data, k)
+		}
+	}
+
+	sort.Strings(replicatedKeys)
 
 	log.Printf("updating secret %s/%s", secret.Namespace, secret.Name)
 
 	secretCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	secretCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceSecret.ResourceVersion
+	secretCopy.Annotations[ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
 
 	s, err := r.client.CoreV1().Secrets(secret.Namespace).Update(secretCopy)
 	if err != nil {
