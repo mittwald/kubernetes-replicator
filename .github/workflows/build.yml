@@ -62,6 +62,4 @@ jobs:
           ./kind get kubeconfig > ./kind-kubeconfig
 
       - name: Run unit tests
-        run: go test ./...
-        env:
-          KUBECONFIG: ./kind-kubeconfig
+        run: KUBECONFIG=$PWD/kind-kubeconfig go test ./...
