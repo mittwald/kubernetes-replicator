@@ -20,7 +20,7 @@ func TestSecretReplicator(t *testing.T) {
 
 	client := kubernetes.NewForConfigOrDie(config)
 
-	repl := NewSecretReplicator(client, 30 * time.Second, false)
+	repl := NewSecretReplicator(client, 30*time.Second, false)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
@@ -38,10 +38,10 @@ func TestSecretReplicator(t *testing.T) {
 	t.Run("replicates from existing secret", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:  "source",
+				Name:      "source",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					ReplicationAllowed: "true",
+					ReplicationAllowed:           "true",
 					ReplicationAllowedNamespaces: ns.Name,
 				},
 			},
@@ -53,7 +53,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		target := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "target",
+				Name:      "target",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
 					ReplicateFromAnnotation: fmt.Sprintf("%s/%s", source.Namespace, source.Name),
@@ -78,10 +78,10 @@ func TestSecretReplicator(t *testing.T) {
 	t.Run("replicates keeps originally present values", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:  "source3",
+				Name:      "source3",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					ReplicationAllowed: "true",
+					ReplicationAllowed:           "true",
 					ReplicationAllowedNamespaces: ns.Name,
 				},
 			},
@@ -93,7 +93,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		target := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "target3",
+				Name:      "target3",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
 					ReplicateFromAnnotation: fmt.Sprintf("%s/%s", source.Namespace, source.Name),
@@ -122,10 +122,10 @@ func TestSecretReplicator(t *testing.T) {
 	t.Run("replication removes keys removed from source secret", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:  "source2",
+				Name:      "source2",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					ReplicationAllowed: "true",
+					ReplicationAllowed:           "true",
 					ReplicationAllowedNamespaces: ns.Name,
 				},
 			},
@@ -138,7 +138,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		target := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "target2",
+				Name:      "target2",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
 					ReplicateFromAnnotation: fmt.Sprintf("%s/%s", source.Namespace, source.Name),
@@ -174,10 +174,10 @@ func TestSecretReplicator(t *testing.T) {
 	t.Run("replication does not remove original values", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:  "source4",
+				Name:      "source4",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					ReplicationAllowed: "true",
+					ReplicationAllowed:           "true",
 					ReplicationAllowedNamespaces: ns.Name,
 				},
 			},
@@ -190,7 +190,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		target := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "target4",
+				Name:      "target4",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
 					ReplicateFromAnnotation: fmt.Sprintf("%s/%s", source.Namespace, source.Name),
