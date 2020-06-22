@@ -75,3 +75,19 @@ func (r *replicatorProps) isReplicationPermitted(object *metav1.ObjectMeta, sour
 	}
 	return allowed, err
 }
+
+func previouslyPresentKeys(object *metav1.ObjectMeta) (map[string]struct{}, bool) {
+	keyList, ok := object.Annotations[ReplicatedKeysAnnotation]
+	if !ok {
+		return nil, false
+	}
+
+	keys := strings.Split(keyList, ",")
+	out := make(map[string]struct{})
+
+	for _, k := range keys {
+		out[k] = struct{}{}
+	}
+
+	return out, true
+}

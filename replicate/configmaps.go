@@ -127,14 +127,31 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 		configMapCopy.Data = make(map[string]string)
 	}
 
+	prevKeys, hasPrevKeys := previouslyPresentKeys(&configMapCopy.ObjectMeta)
+	replicatedKeys := make([]string, 0)
+
 	for key, value := range sourceConfigMap.Data {
 		configMapCopy.Data[key] = value
+
+		replicatedKeys = append(replicatedKeys, key)
+		delete(prevKeys, key)
 	}
 
 	if sourceConfigMap.BinaryData != nil {
 		configMapCopy.BinaryData = make(map[string][]byte)
 		for key, value := range sourceConfigMap.BinaryData {
 			configMapCopy.BinaryData[key] = value
+
+			replicatedKeys = append(replicatedKeys, key)
+			delete(prevKeys, key)
+		}
+	}
+
+	if hasPrevKeys {
+		for k := range prevKeys {
+			log.Printf("removing previously present key %s: not present in source secret any more", k)
+			delete(configMapCopy.Data, k)
+			delete(configMapCopy.BinaryData, k)
 		}
 	}
 
@@ -142,6 +159,7 @@ func (r *configMapReplicator) replicateConfigMap(configMap *v1.ConfigMap, source
 
 	configMapCopy.Annotations[ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	configMapCopy.Annotations[ReplicatedFromVersionAnnotation] = sourceConfigMap.ResourceVersion
+	configMapCopy.Annotations[ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
 
 	s, err := r.client.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy)
 	if err != nil {

@@ -5,6 +5,7 @@ const (
 	ReplicateFromAnnotation         = "replicator.v1.mittwald.de/replicate-from"
 	ReplicatedAtAnnotation          = "replicator.v1.mittwald.de/replicated-at"
 	ReplicatedFromVersionAnnotation = "replicator.v1.mittwald.de/replicated-from-version"
+	ReplicatedKeysAnnotation        = "replicator.v1.mittwald.de/replicated-keys"
 	ReplicationAllowed              = "replicator.v1.mittwald.de/replication-allowed"
 	ReplicationAllowedNamespaces    = "replicator.v1.mittwald.de/replication-allowed-namespaces"
 )
