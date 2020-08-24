@@ -197,12 +197,12 @@ func TestSecretReplicator(t *testing.T) {
 		_, err = secrets2.Create(&target)
 		require.NoError(t, err)
 
-		waitWithTimeout(wg, MaxWaitTime)
+		waitWithTimeout(wg, MaxWaitTime*5)
 		close(stop)
 
 		updTarget, err := secrets2.Get(target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
-		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"])
+		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"], "Target data is: %s but expected nothing", updTarget.Data["foo"])
 	})
 	t.Run("replicates honours ReplicationAllowed tag", func(t *testing.T) {
 		source := corev1.Secret{

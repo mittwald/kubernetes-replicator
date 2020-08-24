@@ -354,30 +354,42 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
 			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
 		} else {
-			for _, namespace := range list.Items {
-				for _, ns := range filters {
-					ns = strings.TrimSpace(ns)
-					if matched, _ := regexp.MatchString(ns, namespace.Name); matched {
-						if namespace.Name == objMeta.Namespace {
-							// Don't work upon itself
-							continue
-						}
-						targetLocation := fmt.Sprintf("%s/%s", namespace.Name, objMeta.Name)
-						targetResource, exists, err := r.Store.GetByKey(targetLocation)
-						if err != nil {
-							logger.WithError(err).Errorf("Could not get objectMeta %s: %+v", targetLocation, err)
-							continue
-						}
-						if !exists {
-							continue
-						}
-						if err := r.UpdateFuncs.DeleteReplicatedResource(targetResource); err != nil {
-							logger.WithError(err).Errorf("Could not delete resource %s: %+v", targetLocation, err)
-						}
-					}
-				}
+			r.DeleteResources(source, list, filters)
+		}
+	}
+}
+
+func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.NamespaceList, filters []string) {
+	for _, namespace := range list.Items {
+		for _, ns := range filters {
+			ns = strings.TrimSpace(ns)
+			if matched, _ := regexp.MatchString(ns, namespace.Name); matched {
+				r.DeleteResource(namespace, source)
 			}
 		}
+	}
+}
+
+func (r *GenericReplicator) DeleteResource(namespace v1.Namespace, source interface{}) {
+	sourceKey := MustGetKey(source)
+	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
+	objMeta := MustGetObjectMeta(source)
+
+	if namespace.Name == objMeta.Namespace {
+		// Don't work upon itself
+		return
+	}
+	targetLocation := fmt.Sprintf("%s/%s", namespace.Name, objMeta.Name)
+	targetResource, exists, err := r.Store.GetByKey(targetLocation)
+	if err != nil {
+		logger.WithError(err).Errorf("Could not get objectMeta %s: %+v", targetLocation, err)
+		return
+	}
+	if !exists {
+		return
+	}
+	if err := r.UpdateFuncs.DeleteReplicatedResource(targetResource); err != nil {
+		logger.WithError(err).Errorf("Could not delete resource %s: %+v", targetLocation, err)
 	}
 }
 

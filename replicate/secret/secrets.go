@@ -155,6 +155,38 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		resourceCopy.Annotations = make(map[string]string)
 	}
 
+	replicatedKeys := r.extractReplicatedKeys(source, targetLocation, resourceCopy)
+
+	sort.Strings(replicatedKeys)
+	resourceCopy.Name = source.Name
+	resourceCopy.Type = targetResourceType
+	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
+	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
+
+	var obj interface{}
+	if exists {
+		logger.Debugf("Updating existing secret %s/%s", target.Name, resourceCopy.Name)
+		obj, err = r.Client.CoreV1().Secrets(target.Name).Update(resourceCopy)
+	} else {
+		logger.Debugf("Creating a new secret secret %s/%s", target.Name, resourceCopy.Name)
+		obj, err = r.Client.CoreV1().Secrets(target.Name).Create(resourceCopy)
+	}
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to update secret %s/%s", target.Name, resourceCopy.Name)
+	} else if err = r.Store.Update(obj); err != nil {
+		err = errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, resourceCopy)
+	}
+
+	return err
+}
+
+func (r *Replicator) extractReplicatedKeys(source *v1.Secret, targetLocation string, resourceCopy *v1.Secret) []string {
+	logger := log.
+		WithField("kind", r.Kind).
+		WithField("source", common.MustGetKey(source)).
+		WithField("target", targetLocation)
+
 	prevKeys, hasPrevKeys := common.PreviouslyPresentKeys(&resourceCopy.ObjectMeta)
 	replicatedKeys := make([]string, 0)
 
@@ -173,31 +205,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 			delete(resourceCopy.Data, k)
 		}
 	}
-
-	sort.Strings(replicatedKeys)
-	resourceCopy.Name = source.Name
-	resourceCopy.Type = targetResourceType
-	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
-	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
-	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
-
-	var obj interface{}
-	if exists {
-		logger.Debugf("Updating existing secret %s/%s", target.Name, resourceCopy.Name)
-		obj, err = r.Client.CoreV1().Secrets(target.Name).Update(resourceCopy)
-	} else {
-		logger.Debugf("Creating a new secret secret %s/%s", target.Name, resourceCopy.Name)
-		obj, err = r.Client.CoreV1().Secrets(target.Name).Create(resourceCopy)
-	}
-	if err != nil {
-		return errors.Wrapf(err, "Failed to update secret %s/%s", target.Name, resourceCopy.Name)
-	}
-
-	if err := r.Store.Update(obj); err != nil {
-		return errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, resourceCopy)
-	}
-
-	return nil
+	return replicatedKeys
 }
 
 func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) (interface{}, error) {
