@@ -126,6 +126,7 @@ func (r *GenericReplicator) IsReplicationPermitted(object *metav1.ObjectMeta, so
 		ns := strings.TrimSpace(ns)
 
 		if matched, _ := regexp.MatchString(ns, object.Namespace); matched {
+			log.Tracef("Namespace '%s' matches '%s' -- allowing replication", object.Namespace, ns)
 			allowed = true
 			break
 		}

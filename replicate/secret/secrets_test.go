@@ -150,7 +150,7 @@ func TestSecretReplicator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello World"), updTarget.Data["foo"])
 	})
-	t.Run("replicates honours ReplicationAllowedNamespaces tag", func(t *testing.T) {
+	t.Run("replicates honours ReplicationAllowedNamespaces label", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "source-repl-honours",
@@ -202,7 +202,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		updTarget, err := secrets2.Get(target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
-		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"], "Target data is: %s but expected nothing", updTarget.Data["foo"])
+		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"], "Target data is: '%s' but expected nothing", updTarget.Data["foo"])
 	})
 	t.Run("replicates honours ReplicationAllowed tag", func(t *testing.T) {
 		source := corev1.Secret{
