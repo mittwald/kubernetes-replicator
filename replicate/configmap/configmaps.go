@@ -112,14 +112,12 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 
 	s, err := r.Client.CoreV1().ConfigMaps(target.Namespace).Update(targetCopy)
 	if err != nil {
-		return errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
+		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
+	} else if err = r.Store.Update(s); err != nil {
+		err = errors.Wrapf(err, "Failed to update cache for %s/%s: %v", target.Namespace, targetCopy, err)
 	}
 
-	if err := r.Store.Update(s); err != nil {
-		return errors.Wrapf(err, "Failed to update cache for %s/%s: %v", target.Namespace, targetCopy, err)
-	}
-
-	return nil
+	return err
 }
 
 // ReplicateObjectTo copies the whole object to target namespace

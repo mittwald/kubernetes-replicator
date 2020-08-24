@@ -338,6 +338,13 @@ func (r *GenericReplicator) ResourceDeleted(source interface{}) {
 	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
 	logger.Debugf("Deleting %s %s", r.Kind, sourceKey)
 
+	r.ResourceDeletedReplicateTo(source)
+	r.ResourceDeletedReplicateFrom(source)
+}
+
+func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
+	sourceKey := MustGetKey(source)
+	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
 	objMeta := MustGetObjectMeta(source)
 	namespaceList, replicateTo := objMeta.Annotations[ReplicateTo]
 	if replicateTo {
@@ -372,7 +379,11 @@ func (r *GenericReplicator) ResourceDeleted(source interface{}) {
 			}
 		}
 	}
+}
 
+func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
+	sourceKey := MustGetKey(source)
+	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
 	replicas, ok := r.DependencyMap[sourceKey]
 	if !ok {
 		logger.Debugf("%s %s has no dependents and can be deleted without issues", r.Kind, sourceKey)
@@ -395,3 +406,4 @@ func (r *GenericReplicator) ResourceDeleted(source interface{}) {
 		}
 	}
 }
+
