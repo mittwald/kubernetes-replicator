@@ -3,9 +3,12 @@ package common
 import (
 	"fmt"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"regexp"
 	"sort"
+	"strings"
 )
 
 func GetKeysFromBinaryMap(data map[string][]byte) []string {
@@ -52,4 +55,18 @@ func MustGetObject(obj interface{}) metav1.Object {
 	}
 
 	panic(errors.Errorf("Unknown type: %v", reflect.TypeOf(obj)))
+}
+
+func StringToPatternList(list string) (result []*regexp.Regexp) {
+	for _, s := range strings.Split(list, ",") {
+		s = strings.TrimSpace(s)
+		r, err := regexp.Compile(s)
+		if err != nil {
+			log.WithError(err).Errorf("Invalid regex '%s' in namespace string %s: %v", s, list, err)
+		} else {
+			result = append(result, r)
+		}
+	}
+
+	return
 }

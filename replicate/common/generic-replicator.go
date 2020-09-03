@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -136,12 +137,13 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	for _, obj := range r.Store.List() {
 		objectMeta := MustGetObject(obj)
 		replicatedList := make([]string, 0)
-		namespaceList, found := objectMeta.GetAnnotations()[ReplicateTo]
+		namespacePatterns, found := objectMeta.GetAnnotations()[ReplicateTo]
 		if found {
-			if err := r.resourceAddedReplicateTo(obj, namespaceList, ns); err != nil {
+
+			if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, []v1.Namespace{*ns}); err != nil {
 				logger.
 					WithError(err).
-					Errorf("Failed replicating the resource to new namespace %s: %v", ns.Name, err)
+					Errorf("Failed replicating the resource to the new namespace %s: %v", ns.Name, err)
 			} else {
 				replicatedList = append(replicatedList, ns.Name)
 			}
@@ -150,6 +152,7 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 		}
 	}
 }
+
 
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation
 func (r *GenericReplicator) ResourceAdded(obj interface{}) {
@@ -179,9 +182,13 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	}
 
 	// Match resources with "replicate-to" annotation
-	namespaceList, replicateTo := objectMeta.GetAnnotations()[ReplicateTo]
+	namespacePatterns, replicateTo := objectMeta.GetAnnotations()[ReplicateTo]
 	if replicateTo {
-		if err := r.resourceAddedReplicateTo(obj, namespaceList, nil); err != nil {
+
+		if list, err := r.Client.CoreV1().Namespaces().List(metav1.ListOptions{}); err != nil {
+			logger.WithError(err).Errorf("Failed to list namespaces: %v", err)
+			return
+		} else if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, list.Items); err != nil {
 			logger.
 				WithError(err).
 				Errorf(
@@ -227,51 +234,61 @@ func (r *GenericReplicator) resourceAddedReplicateFrom(sourceLocation string, ta
 	return nil
 }
 
-// resourceAddedReplicateFrom replicates resources with ReplicateTo
-func (r *GenericReplicator) resourceAddedReplicateTo(obj interface{}, namespaceList string, targetNamespace *v1.Namespace) error {
+// resourceAddedReplicateFrom replicates resources with ReplicateTo annotation
+func (r *GenericReplicator) replicateResourceToMatchingNamespaces(obj interface{}, nsPatternList string, namespaceList []v1.Namespace) error {
 	cacheKey := MustGetKey(obj)
 	logger := log.WithField("kind", r.Kind).WithField("source", cacheKey)
 
-	logger.Infof("%s %s to be replicated to: [%s]", r.Kind, cacheKey, namespaceList)
-	filters := strings.Split(namespaceList, ",")
+	logger.Infof("%s %s to be replicated to: [%s]", r.Kind, cacheKey, nsPatternList)
 
-	var namespaces []v1.Namespace
-	if targetNamespace == nil {
-		list, err := r.Client.CoreV1().Namespaces().List(metav1.ListOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "Failed to list namespaces: %v", err)
-		}
-		namespaces = list.Items
-	} else {
-		namespaces = make([]v1.Namespace, 1)
-		namespaces[0] = *targetNamespace
+	replicateTo := r.getNamespacesToReplicate(MustGetObject(obj).GetNamespace(), nsPatternList, namespaceList)
+
+	if replicated, err := r.replicateResourceToNamespaces(obj, replicateTo); err != nil {
+		return errors.Wrapf(err, "Replicated %s to %d out of %d namespaces: %v out of %v - %+v",
+			cacheKey, len(replicated), len(replicateTo), replicated, replicateTo, err,
+		)
 	}
 
-	replicatedTo := make([]string, 0)
+	return nil
+}
+
+// getNamespacesToReplicate will check the provided filters and create a list of namespace into with to replicate the
+// given object.
+func (r *GenericReplicator) getNamespacesToReplicate(myNs string, patterns string, namespaces []v1.Namespace) []v1.Namespace {
+
+	replicateTo := make([]v1.Namespace, 0)
 	for _, namespace := range namespaces {
-		for _, ns := range filters {
-			ns = strings.TrimSpace(ns)
-			if matched, _ := regexp.MatchString(ns, namespace.Name); matched {
-				if namespace.Name == MustGetObject(obj).GetNamespace() {
+		for _, ns := range StringToPatternList(patterns) {
+			if matched := ns.MatchString(namespace.Name); matched {
+				if namespace.Name == myNs {
 					// Don't replicate upon itself
 					continue
 				}
-
-				if err := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
-					return errors.Wrapf(err, "Failed to replicate %s %s -> %s: %v",
-						r.Kind, cacheKey, namespace.Name, err,
-					)
-				} else {
-					replicatedTo = append(replicatedTo, namespace.Name)
-				}
+				replicateTo = append(replicateTo, namespace)
 				break
 
 			}
 		}
 	}
+	return replicateTo
+}
 
-	logger.Debugf("Replicated %s to %d namespaces: %v", cacheKey, len(replicatedTo), replicatedTo)
-	return nil
+// replicateResourceToNamespaces will replicate the given object into target namespaces. It will return a list of
+// Namespaces it was successful in replicating into
+func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targets []v1.Namespace) (replicatedTo []v1.Namespace, err error) {
+	cacheKey := MustGetKey(obj)
+
+	for _, namespace := range targets {
+		if err := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
+			err = multierror.Append(errors.Wrapf(err, "Failed to replicate %s %s -> %s: %v",
+				r.Kind, cacheKey, namespace.Name, err,
+			))
+		} else {
+			replicatedTo = append(replicatedTo, namespace)
+		}
+	}
+
+	return
 }
 
 func (r *GenericReplicator) updateDependents(obj interface{}, dependents map[string]interface{}) error {
