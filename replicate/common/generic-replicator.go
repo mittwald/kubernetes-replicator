@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"regexp"
@@ -39,9 +38,6 @@ type GenericReplicator struct {
 	Store      cache.Store
 	Controller cache.Controller
 
-	NamespaceStore      cache.Store
-	NamespaceController cache.Controller
-
 	DependencyMap map[string]map[string]interface{}
 	UpdateFuncs   UpdateFuncs
 }
@@ -67,23 +63,7 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 		},
 	)
 
-	repl.NamespaceStore, repl.NamespaceController = cache.NewInformer(
-		&cache.ListWatch{
-			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
-				return config.Client.CoreV1().Namespaces().List(lo)
-			},
-			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return config.Client.CoreV1().Namespaces().Watch(lo)
-			},
-		},
-		&v1.Namespace{},
-		config.ResyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				repl.NamespaceAdded(obj.(*v1.Namespace))
-			},
-		},
-	)
+	namespaceWatcher.OnNamespaceAdded(config.Client, config.ResyncPeriod, repl.NamespaceAdded)
 
 	repl.Store = store
 	repl.Controller = controller
@@ -147,7 +127,6 @@ func (r *GenericReplicator) Synced() bool {
 
 func (r *GenericReplicator) Run() {
 	log.WithField("kind", r.Kind).Infof("running %s controller", r.Kind)
-	go r.NamespaceController.Run(wait.NeverStop)
 	r.Controller.Run(wait.NeverStop)
 }
 
