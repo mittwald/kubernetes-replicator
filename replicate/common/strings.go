@@ -2,8 +2,7 @@ package common
 
 import (
 	"fmt"
-	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"sort"
@@ -29,68 +28,28 @@ func GetKeysFromStringMap(data map[string]string) []string {
 	return strings
 }
 
-// Create a key from Kubernetes resource
+// MustGetKey creates a key from Kubernetes resource in the format <namespace>/<name>
 func MustGetKey(obj interface{}) string {
 	if obj == nil {
 		return ""
-	} else if s, ok := obj.(*metav1.ObjectMeta); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(metav1.ObjectMeta); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(*v1.Secret); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(v1.Secret); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(*v1.ConfigMap); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(v1.ConfigMap); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(*rbacv1.Role); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(rbacv1.Role); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(*rbacv1.RoleBinding); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(rbacv1.RoleBinding); ok {
-		return fmt.Sprintf("%s/%s", s.Namespace, s.Name)
-	} else if s, ok := obj.(*v1.Namespace); ok {
-		return fmt.Sprintf("%s", s.Namespace)
-	} else if s, ok := obj.(v1.Namespace); ok {
-		return fmt.Sprintf("%s", s.Namespace)
-	} else {
-		panic(fmt.Sprintf("Unknown type: %s", reflect.TypeOf(obj)))
 	}
+
+	o := MustGetObject(obj)
+	return fmt.Sprintf("%s/%s", o.GetNamespace(), o.GetName())
+
 }
 
-func MustGetObjectMeta(obj interface{}) *metav1.ObjectMeta {
+// MustGetObject casts the object into a Kubernetes `metav1.Object`
+func MustGetObject(obj interface{}) metav1.Object {
 	if obj == nil {
 		return nil
-	} else if s, ok := obj.(*metav1.ObjectMeta); ok {
-		return s
-	} else if s, ok := obj.(metav1.ObjectMeta); ok {
-		return &s
-	} else if s, ok := obj.(*v1.Secret); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(v1.Secret); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(*v1.ConfigMap); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(v1.ConfigMap); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(*rbacv1.Role); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(rbacv1.Role); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(*rbacv1.RoleBinding); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(rbacv1.RoleBinding); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(*v1.Namespace); ok {
-		return &s.ObjectMeta
-	} else if s, ok := obj.(v1.Namespace); ok {
-		return &s.ObjectMeta
-	} else {
-		panic(fmt.Sprintf("Unknown type: %s", reflect.TypeOf(obj)))
 	}
 
+	if oma, ok := obj.(metav1.ObjectMetaAccessor); ok {
+		return oma.GetObjectMeta()
+	} else if o, ok := obj.(metav1.Object); ok {
+		return o
+	}
+
+	panic(errors.Errorf("Unknown type: %v", reflect.TypeOf(obj)))
 }

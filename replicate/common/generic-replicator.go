@@ -155,9 +155,9 @@ func (r *GenericReplicator) Run() {
 func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	logger := log.WithField("kind", r.Kind).WithField("target", ns.Name)
 	for _, obj := range r.Store.List() {
-		objectMeta := MustGetObjectMeta(obj)
+		objectMeta := MustGetObject(obj)
 		replicatedList := make([]string, 0)
-		namespaceList, found := objectMeta.Annotations[ReplicateTo]
+		namespaceList, found := objectMeta.GetAnnotations()[ReplicateTo]
 		if found {
 			if err := r.resourceAddedReplicateTo(obj, namespaceList, ns); err != nil {
 				logger.
@@ -174,7 +174,7 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation
 func (r *GenericReplicator) ResourceAdded(obj interface{}) {
-	objectMeta := MustGetObjectMeta(obj)
+	objectMeta := MustGetObject(obj)
 	cacheKey := MustGetKey(objectMeta)
 	logger := log.WithField("kind", r.Kind).WithField("resource", cacheKey)
 
@@ -188,7 +188,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	}
 
 	// Match resources with "replicate-from" annotation
-	source, replicateFrom := objectMeta.Annotations[ReplicateFromAnnotation]
+	source, replicateFrom := objectMeta.GetAnnotations()[ReplicateFromAnnotation]
 	if replicateFrom {
 		if err := r.resourceAddedReplicateFrom(source, obj); err != nil {
 			logger.WithError(err).Errorf(
@@ -200,7 +200,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	}
 
 	// Match resources with "replicate-to" annotation
-	namespaceList, replicateTo := objectMeta.Annotations[ReplicateTo]
+	namespaceList, replicateTo := objectMeta.GetAnnotations()[ReplicateTo]
 	if replicateTo {
 		if err := r.resourceAddedReplicateTo(obj, namespaceList, nil); err != nil {
 			logger.
@@ -273,7 +273,7 @@ func (r *GenericReplicator) resourceAddedReplicateTo(obj interface{}, namespaceL
 		for _, ns := range filters {
 			ns = strings.TrimSpace(ns)
 			if matched, _ := regexp.MatchString(ns, namespace.Name); matched {
-				if namespace.Name == MustGetObjectMeta(obj).Namespace {
+				if namespace.Name == MustGetObject(obj).GetNamespace() {
 					// Don't replicate upon itself
 					continue
 				}
@@ -346,8 +346,8 @@ func (r *GenericReplicator) ResourceDeleted(source interface{}) {
 func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 	sourceKey := MustGetKey(source)
 	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
-	objMeta := MustGetObjectMeta(source)
-	namespaceList, replicateTo := objMeta.Annotations[ReplicateTo]
+	objMeta := MustGetObject(source)
+	namespaceList, replicateTo := objMeta.GetAnnotations()[ReplicateTo]
 	if replicateTo {
 		filters := strings.Split(namespaceList, ",")
 		list, err := r.Client.CoreV1().Namespaces().List(metav1.ListOptions{})
@@ -373,14 +373,15 @@ func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.Namespa
 
 func (r *GenericReplicator) DeleteResource(namespace v1.Namespace, source interface{}) {
 	sourceKey := MustGetKey(source)
-	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
-	objMeta := MustGetObjectMeta(source)
 
-	if namespace.Name == objMeta.Namespace {
+	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
+	objMeta := MustGetObject(source)
+
+	if namespace.Name == objMeta.GetNamespace() {
 		// Don't work upon itself
 		return
 	}
-	targetLocation := fmt.Sprintf("%s/%s", namespace.Name, objMeta.Name)
+	targetLocation := fmt.Sprintf("%s/%s", namespace.Name, objMeta.GetName())
 	targetResource, exists, err := r.Store.GetByKey(targetLocation)
 	if err != nil {
 		logger.WithError(err).Errorf("Could not get objectMeta %s: %+v", targetLocation, err)
@@ -396,6 +397,7 @@ func (r *GenericReplicator) DeleteResource(namespace v1.Namespace, source interf
 
 func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
 	sourceKey := MustGetKey(source)
+
 	logger := log.WithField("kind", r.Kind).WithField("source", sourceKey)
 	replicas, ok := r.DependencyMap[sourceKey]
 	if !ok {
@@ -409,7 +411,7 @@ func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
 			logger.WithError(err).Warnf("could not load dependent %s %s: %v", r.Kind, dependentKey, err)
 			continue
 		}
-		s, err := r.UpdateFuncs.PatchDeleteDependent(MustGetKey(source), target)
+		s, err := r.UpdateFuncs.PatchDeleteDependent(sourceKey, target)
 		if err != nil {
 			logger.WithError(err).Warnf("could not patch dependent %s %s: %v", r.Kind, dependentKey, err)
 			continue

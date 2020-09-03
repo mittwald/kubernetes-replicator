@@ -111,7 +111,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -171,7 +171,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target-repl-honours",
 				Namespace: ns2.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -225,7 +225,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target-repl-allowed",
 				Namespace: ns2.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -280,7 +280,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target3",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -345,7 +345,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target2",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -429,7 +429,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target4",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -751,7 +751,7 @@ func TestSecretReplicator(t *testing.T) {
 				Name:      "target-ns-delete",
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(source),
+					common.ReplicateFromAnnotation: common.MustGetKey(&source),
 				},
 			},
 			Type: corev1.SecretTypeOpaque,

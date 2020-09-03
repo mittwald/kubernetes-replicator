@@ -8,7 +8,7 @@ RUN go get -v ./...
 RUN go vet -v ./...
 RUN CGO_ENABLED=0 GO111MODULE=on go build
 
-FROM --platfrom=$TARGETPLATFORM scratch
+FROM --platform=$TARGETPLATFORM scratch
 ARG TARGETPLATFORM
 LABEL MAINTAINER="Martin Helmich <m.helmich@mittwald.de>"
 
