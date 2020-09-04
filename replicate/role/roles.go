@@ -66,7 +66,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	sourceVersion := source.ResourceVersion
 
 	if ok && targetVersion == sourceVersion {
-		logger.Debugf("target %s/%s is already up-to-date", target.Namespace, target.Name)
+		logger.Debugf("target %s is already up-to-date", common.MustGetKey(target))
 		return nil
 	}
 
