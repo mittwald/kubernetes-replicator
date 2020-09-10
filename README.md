@@ -51,8 +51,10 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 Push-based replication will "push out" the secrets, configmaps, roles and rolebindings into namespaces when new 
 namespaces are created or when the secret/configmap/roles/rolebindings changes.
 
-To configure a push-based replication, add `replicator.v1.mittwald.de/replication-to-namespaces` annotation to your
-secret, role, or configmap.
+To configure a push-based replication, add `replicator.v1.mittwald.de/replicate-to` annotation to your
+secret, role, or configmap. Value of this annotation should contain a comma separated list of permitted namespaces or regular expressions. 
+For example `namespace-1,my-ns-2,app-ns-[0-9]*`: in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` 
+as well as any namespace that matches the regular expression `app-ns-[0-9]*`.
 
 Example:
 ```yaml
@@ -60,7 +62,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   annotations:
-    replicator.v1.mittwald.de/replication-to-namespaces: "my-ns-1,namespace-[0-9]*"
+    replicator.v1.mittwald.de/replicate-to: "my-ns-1,namespace-[0-9]*"
 data:
   key1: <value>
 ```
