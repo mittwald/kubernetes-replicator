@@ -1,4 +1,4 @@
-package replicate
+package common
 
 // JSONPatchOperation is a struct that defines PATCH operations on
 // a JSON structure.

@@ -1,17 +1,20 @@
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: mittwald:replicator
 rules:
-- apiGroups: [""] # "" indicates the core API group
-  resources: ["secrets", "configmaps"]
-  verbs: ["get", "watch", "list", "update", "patch"]
-- apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["roles", "rolebindings"]
-  verbs: ["get", "watch", "list", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "watch", "list", "update", "patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "watch", "list", "update", "patch"]
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: mittwald:replicator
 roleRef:

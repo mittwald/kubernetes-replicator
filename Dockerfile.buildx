@@ -1,0 +1,17 @@
+FROM --platform=$BUILDPLATFORM golang:1.14 AS deps
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
+COPY . /src
+WORKDIR /src
+RUN go get -v ./...
+RUN go vet -v ./...
+RUN CGO_ENABLED=0 GO111MODULE=on go build
+
+FROM --platform=$TARGETPLATFORM scratch
+ARG TARGETPLATFORM
+LABEL MAINTAINER="Martin Helmich <m.helmich@mittwald.de>"
+
+COPY --from=build /src/ /kubernetes-replicator
+
+CMD ["/kubernetes-replicator"]
