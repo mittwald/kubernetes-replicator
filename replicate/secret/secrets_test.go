@@ -150,60 +150,7 @@ func TestSecretReplicator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello World"), updTarget.Data["foo"])
 	})
-	t.Run("replicates honours ReplicationAllowedNamespaces label", func(t *testing.T) {
-		source := corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "source-repl-honours",
-				Namespace: ns.Name,
-				Annotations: map[string]string{
-					common.ReplicationAllowed:           "true",
-					common.ReplicationAllowedNamespaces: ns.Name,
-				},
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"foo": []byte("Hello World"),
-			},
-		}
 
-		target := corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "target-repl-honours",
-				Namespace: ns2.Name,
-				Annotations: map[string]string{
-					common.ReplicateFromAnnotation: common.MustGetKey(&source),
-				},
-			},
-			Type: corev1.SecretTypeOpaque,
-		}
-
-		wg, stop := waitForSecrets(client, 2, EventHandlerFuncs{
-			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
-				secret := obj.(*corev1.Secret)
-				if secret.Namespace == source.Namespace && secret.Name == source.Name {
-					log.Debugf("AddFunc %+v", obj)
-					wg.Done()
-				} else if secret.Namespace == target.Namespace && secret.Name == target.Name {
-					log.Debugf("AddFunc %+v", obj)
-					wg.Done()
-				}
-			},
-		})
-
-		_, err := secrets.Create(&source)
-		require.NoError(t, err)
-
-		secrets2 := client.CoreV1().Secrets(prefix + "test2")
-		_, err = secrets2.Create(&target)
-		require.NoError(t, err)
-
-		waitWithTimeout(wg, MaxWaitTime*5)
-		close(stop)
-
-		updTarget, err := secrets2.Get(target.Name, metav1.GetOptions{})
-		require.NoError(t, err)
-		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"], "Target data is: '%s' but expected nothing", updTarget.Data["foo"])
-	})
 	t.Run("replicates honours ReplicationAllowed tag", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
