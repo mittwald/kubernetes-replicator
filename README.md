@@ -1,6 +1,6 @@
 # ConfigMap, Secret and Role, and RoleBinding replication for Kubernetes
 
-![Build Status](https://img.shields.io/github/workflow/status/mittwald/kubernetes-replicator/Compile & Test)
+![Build Status](https://github.com/mittwald/kubernetes-replicator/workflows/Compile%20&%20Test/badge.svg)
 
 This repository contains a custom Kubernetes controller that can be used to make
 secrets and config maps available in multiple namespaces.
