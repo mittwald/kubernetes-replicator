@@ -8,6 +8,6 @@ description: Controller for replicating secrets+configmaps across namespaces
 # https://github.com/mittwald/helm-charts/blob/master/README.md#limitations
 #type: application
 
-version: 2.3.0
+version: 2.4.0
 
-appVersion: v2.3.0
+appVersion: v2.4.0
