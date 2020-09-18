@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - run: docker login -u "${{ secrets.QUAY_IO_USER }}" -p "${{ secrets.QUAY_IO_PASSWORD }}" quay.io
+      - run: docker login -u "${{ secrets.QUAY_IO_USER }}" -p "${{ secrets.QUAY_IO_TOKEN }}" quay.io
 
       - run: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist &&
         env:
