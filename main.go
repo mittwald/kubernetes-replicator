@@ -2,14 +2,15 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	"github.com/mittwald/kubernetes-replicator/replicate/configmap"
 	"github.com/mittwald/kubernetes-replicator/replicate/role"
 	"github.com/mittwald/kubernetes-replicator/replicate/rolebinding"
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
-	"net/http"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -47,7 +48,7 @@ func init() {
 	default:
 		log.SetLevel(log.InfoLevel)
 	}
-	if strings.ToUpper(strings.TrimSpace(f.LogLevel)) == "JSON" {
+	if strings.ToUpper(strings.TrimSpace(f.LogFormat)) == "JSON" {
 		log.SetFormatter(&log.JSONFormatter{})
 	}
 
@@ -55,6 +56,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	log.Debugf("using flag values %#v", f)
 }
 
 func main() {
