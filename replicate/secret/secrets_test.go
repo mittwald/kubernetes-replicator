@@ -2,7 +2,15 @@ package secret
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -15,11 +23,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func namespacePrefix() string {
@@ -62,8 +65,15 @@ func TestSecretReplicator(t *testing.T) {
 	log.SetLevel(log.TraceLevel)
 	log.SetFormatter(&PlainFormatter{})
 
-	configFile := os.Getenv("KUBECONFIG")
-	config, err := clientcmd.BuildConfigFromFlags("", configFile)
+	kubeconfig := os.Getenv("KUBECONFIG")
+	//is KUBECONFIG is not specified try to use the local KUBECONFIG or the in cluster config
+	if len(kubeconfig) == 0 {
+		if home := homeDir(); home != "" && home != "/root" {
+			kubeconfig = filepath.Join(home, ".kube", "config")
+		}
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	require.NoError(t, err)
 
 	prefix := namespacePrefix()
@@ -75,16 +85,16 @@ func TestSecretReplicator(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "test"}}
-	_, err = client.CoreV1().Namespaces().Create(&ns)
+	_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	ns2 := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "test2"}}
-	_, err = client.CoreV1().Namespaces().Create(&ns2)
+	_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns2, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	defer func() {
-		_ = client.CoreV1().Namespaces().Delete(ns.Name, &metav1.DeleteOptions{})
-		_ = client.CoreV1().Namespaces().Delete(ns2.Name, &metav1.DeleteOptions{})
+		_ = client.CoreV1().Namespaces().Delete(context.TODO(), ns.Name, metav1.DeleteOptions{})
+		_ = client.CoreV1().Namespaces().Delete(context.TODO(), ns2.Name, metav1.DeleteOptions{})
 	}()
 
 	secrets := client.CoreV1().Secrets(prefix + "test")
@@ -137,16 +147,16 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		_, err = secrets.Create(&target)
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err := secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello World"), updTarget.Data["foo"])
 	})
@@ -191,17 +201,17 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		secrets2 := client.CoreV1().Secrets(prefix + "test2")
-		_, err = secrets2.Create(&target)
+		_, err = secrets2.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err := secrets2.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets2.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.NotEqual(t, []byte("Hello World"), updTarget.Data["foo"])
 	})
@@ -255,16 +265,16 @@ func TestSecretReplicator(t *testing.T) {
 				}
 			},
 		})
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		_, err = secrets.Create(&target)
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err := secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello World"), updTarget.Data["foo"])
 		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
@@ -318,16 +328,16 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		_, err = secrets.Create(&target)
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err := secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
 
@@ -341,13 +351,13 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`))
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err = secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err = secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		_, hasFoo := updTarget.Data["foo"]
@@ -405,16 +415,16 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		_, err = secrets.Create(&target)
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err := secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
 
@@ -428,13 +438,13 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`))
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err = secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err = secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		_, hasFoo := updTarget.Data["foo"]
@@ -470,14 +480,14 @@ func TestSecretReplicator(t *testing.T) {
 				}
 			},
 		})
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
 		secrets2 := client.CoreV1().Secrets(prefix + "test2")
-		updTarget, err := secrets2.Get(source.Name, metav1.GetOptions{})
+		updTarget, err := secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
@@ -492,13 +502,13 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`))
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err = secrets2.Get(source.Name, metav1.GetOptions{})
+		updTarget, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		_, hasFoo := updTarget.Data["foo"]
@@ -515,11 +525,10 @@ func TestSecretReplicator(t *testing.T) {
 				Namespace: ns2.Name,
 			},
 			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-			},
+			Data: map[string][]byte{},
 		}
 
-		_, err = secrets2.Create(&target)
+		_, err = secrets2.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		time.Sleep(100 * time.Millisecond)
@@ -539,22 +548,22 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		}
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		time.Sleep(300 * time.Millisecond)
 
-		updTarget, err := secrets2.Get(source.Name, metav1.GetOptions{})
+		updTarget, err := secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
 
-		_, err = secrets.Patch(source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`))
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
 		require.NoError(t, err)
 
 		time.Sleep(300 * time.Millisecond)
 
-		updTarget, err = secrets2.Get(source.Name, metav1.GetOptions{})
+		updTarget, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		_, hasFoo := updTarget.Data["foo"]
@@ -589,7 +598,7 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -617,11 +626,11 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = client.CoreV1().Namespaces().Create(&ns3)
+		_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns3, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		defer func() {
-			_ = client.CoreV1().Namespaces().Delete(ns3.Name, &metav1.DeleteOptions{})
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), ns3.Name, metav1.DeleteOptions{})
 		}()
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -631,7 +640,7 @@ func TestSecretReplicator(t *testing.T) {
 		close(stop2)
 
 		secrets3 := client.CoreV1().Secrets(namespaceName)
-		updTarget, err := secrets3.Get(source.Name, metav1.GetOptions{})
+		updTarget, err := secrets3.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
 
@@ -644,13 +653,13 @@ func TestSecretReplicator(t *testing.T) {
 				}
 			},
 		})
-		_, err = secrets.Patch(source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`))
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		updTarget, err = secrets3.Get(source.Name, metav1.GetOptions{})
+		updTarget, err = secrets3.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		_, hasFoo := updTarget.Data["foo"]
@@ -671,7 +680,7 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = client.CoreV1().Namespaces().Create(&ns4)
+		_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns4, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -726,10 +735,10 @@ func TestSecretReplicator(t *testing.T) {
 
 		secrets4 := client.CoreV1().Secrets(prefix + "test4")
 
-		_, err := secrets4.Create(&source)
+		_, err := secrets4.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
-		_, err = secrets.Create(&target)
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -745,16 +754,16 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		err = client.CoreV1().Namespaces().Delete(ns4.Name, &metav1.DeleteOptions{})
+		err = client.CoreV1().Namespaces().Delete(context.TODO(), ns4.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime*10)
 		close(stop)
 
-		nsfound, err := client.CoreV1().Namespaces().Get(ns4.Name, metav1.GetOptions{})
+		nsfound, err := client.CoreV1().Namespaces().Get(context.TODO(), ns4.Name, metav1.GetOptions{})
 		require.Condition(t, func() bool { return errors.IsNotFound(err) }, "Expected no namespace but got: %v; %v", nsfound, err)
 
-		updTarget, err := secrets.Get(target.Name, metav1.GetOptions{})
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.NotEqual(t, []byte("Hello Bar"), updTarget.Data["bar"])
 	})
@@ -788,14 +797,14 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
 		secrets2 := client.CoreV1().Secrets(prefix + "test2")
-		_, err = secrets2.Get(source.Name, metav1.GetOptions{})
+		_, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
 		wg, stop = waitForSecrets(client, 2, EventHandlerFuncs{
@@ -811,16 +820,16 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		err = secrets.Delete(source.Name, &metav1.DeleteOptions{})
+		err = secrets.Delete(context.TODO(), source.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
-		_, err = secrets.Get(source.Name, metav1.GetOptions{})
+		_, err = secrets.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.Condition(t, func() bool { return errors.IsNotFound(err) }, "Expected not found, but got a secret in namespace test: %+v", err)
 
-		_, err = secrets2.Get(source.Name, metav1.GetOptions{})
+		_, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.Condition(t, func() bool { return errors.IsNotFound(err) }, "Expected not found, but got: %+v", err)
 	})
 
@@ -853,14 +862,14 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err := secrets.Create(&source)
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
 		close(stop)
 
 		secrets2 := client.CoreV1().Secrets(prefix + "test2")
-		updTarget, err := secrets2.Get(source.Name, metav1.GetOptions{})
+		updTarget, err := secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 		require.Equal(t, []byte("{}"), updTarget.Data[".dockercfg"])
 		require.Equal(t, corev1.SecretTypeDockercfg, updTarget.Type)
@@ -943,4 +952,11 @@ func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) {
 		err := pkgerrors.Errorf("Timeout hit")
 		log.WithError(err).Debugf("Wait timed out")
 	}
+}
+
+func homeDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return os.Getenv("USERPROFILE") // windows
 }

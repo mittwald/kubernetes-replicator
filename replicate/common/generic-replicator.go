@@ -1,7 +1,13 @@
 package common
 
 import (
+	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -11,10 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type ReplicatorConfig struct {
@@ -164,7 +166,6 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	}
 }
 
-
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation
 func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	objectMeta := MustGetObject(obj)
@@ -197,7 +198,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	if replicateTo {
 		r.ReplicateToList[sourceKey] = struct{}{}
 
-		if list, err := r.Client.CoreV1().Namespaces().List(metav1.ListOptions{}); err != nil {
+		if list, err := r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{}); err != nil {
 			logger.WithError(err).Errorf("Failed to list namespaces: %v", err)
 			return
 		} else if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, list.Items); err != nil {
@@ -363,7 +364,7 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 	namespaceList, replicateTo := objMeta.GetAnnotations()[ReplicateTo]
 	if replicateTo {
 		filters := strings.Split(namespaceList, ",")
-		list, err := r.Client.CoreV1().Namespaces().List(metav1.ListOptions{})
+		list, err := r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
 			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
@@ -434,4 +435,3 @@ func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
 		}
 	}
 }
-

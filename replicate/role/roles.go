@@ -1,13 +1,15 @@
 package role
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	"time"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,10 +33,10 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			ResyncPeriod: resyncPeriod,
 			Client:       client,
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
-				return client.RbacV1().Roles("").List(lo)
+				return client.RbacV1().Roles("").List(context.TODO(), lo)
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-				return client.RbacV1().Roles("").Watch(lo)
+				return client.RbacV1().Roles("").Watch(context.TODO(), lo)
 			},
 		}),
 	}
@@ -79,7 +81,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
-	s, err := r.Client.RbacV1().Roles(target.Namespace).Update(targetCopy)
+	s, err := r.Client.RbacV1().Roles(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
 	} else if err = r.Store.Update(s); err != nil {
@@ -136,10 +138,10 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var obj interface{}
 	if exists {
 		logger.Debugf("Updating existing role %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().Roles(target.Name).Update(targetCopy)
+		obj, err = r.Client.RbacV1().Roles(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	} else {
 		logger.Debugf("Creating a new role %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().Roles(target.Name).Create(targetCopy)
+		obj, err = r.Client.RbacV1().Roles(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 	}
 	if err != nil {
 		return errors.Wrapf(err, "Failed to update role %s/%s", target.Name, targetCopy.Name)
@@ -176,7 +178,8 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent role %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	s, err := r.Client.RbacV1().Roles(targetObject.Namespace).Patch(targetObject.Name, types.JSONPatchType, patchBody)
+	// TODO needs to check on this
+	s, err := r.Client.RbacV1().Roles(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{}, "")
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching role %s: %v", dependentKey, err)
 	}
@@ -193,7 +196,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*rbacv1.Role)
 	logger.Debugf("Deleting %s", targetLocation)
-	if err := r.Client.CoreV1().Secrets(object.Namespace).Delete(object.Name, &metav1.DeleteOptions{}); err != nil {
+	if err := r.Client.CoreV1().Secrets(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}
 	return nil
