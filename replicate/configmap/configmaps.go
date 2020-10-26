@@ -239,8 +239,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent config map %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	// TODO need to check on this
-	s, err := r.Client.CoreV1().ConfigMaps(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{}, "")
+	s, err := r.Client.CoreV1().ConfigMaps(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching secret %s: %v", dependentKey, err)
 

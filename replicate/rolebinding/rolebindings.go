@@ -176,8 +176,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent roleBinding %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	//TODO need to check on this
-	s, err := r.Client.RbacV1().RoleBindings(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{}, "")
+	s, err := r.Client.RbacV1().RoleBindings(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching role %s: %v", dependentKey, err)
 	}

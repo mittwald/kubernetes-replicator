@@ -234,8 +234,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent %s %s", r.Kind, dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	//TODO check here
-	s, err := r.Client.CoreV1().Secrets(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{}, "")
+	s, err := r.Client.CoreV1().Secrets(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching secret %s: %v", dependentKey, err)
 	}
