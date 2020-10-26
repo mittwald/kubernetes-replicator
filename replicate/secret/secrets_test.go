@@ -351,7 +351,7 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -438,7 +438,7 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -502,7 +502,7 @@ func TestSecretReplicator(t *testing.T) {
 			},
 		})
 
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
@@ -558,7 +558,7 @@ func TestSecretReplicator(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
 
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
 		require.NoError(t, err)
 
 		time.Sleep(300 * time.Millisecond)
@@ -653,7 +653,7 @@ func TestSecretReplicator(t *testing.T) {
 				}
 			},
 		})
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{}, "")
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
 		require.NoError(t, err)
 
 		waitWithTimeout(wg, MaxWaitTime)
