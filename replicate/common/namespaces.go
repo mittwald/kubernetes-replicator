@@ -1,6 +1,10 @@
 package common
 
 import (
+	"context"
+	"sync"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -9,8 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"sync"
-	"time"
 )
 
 var namespaceWatcher NamespaceWatcher
@@ -39,10 +41,10 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 		nw.NamespaceStore, nw.NamespaceController = cache.NewInformer(
 			&cache.ListWatch{
 				ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
-					return client.CoreV1().Namespaces().List(lo)
+					return client.CoreV1().Namespaces().List(context.TODO(), lo)
 				},
 				WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
-					return client.CoreV1().Namespaces().Watch(lo)
+					return client.CoreV1().Namespaces().Watch(context.TODO(), lo)
 				},
 			},
 			&v1.Namespace{},
