@@ -19,7 +19,7 @@ jobs:
           There has not been any activity to this issue in the last 14 days.
           It will automatically be closed after 7 more days. Remove the `stale` label to prevent this.
         stale-issue-label: 'stale'
-        exempt-issue-labels: 'confirmed,help wanted'
+        exempt-issue-labels: 'confirmed,help-wanted'
 
         stale-pr-message: >
           There has not been any activity to this pull request in the last 14 days.
