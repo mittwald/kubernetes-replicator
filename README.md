@@ -48,24 +48,38 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ### "Push-based" replication
 
-Push-based replication will "push out" the secrets, configmaps, roles and rolebindings into namespaces when new 
-namespaces are created or when the secret/configmap/roles/rolebindings changes.
+Push-based replication will "push out" the secrets, configmaps, roles and rolebindings into namespaces when new namespaces are created or when the secret/configmap/roles/rolebindings changes.
 
-To configure a push-based replication, add `replicator.v1.mittwald.de/replicate-to` annotation to your
-secret, role, or configmap. Value of this annotation should contain a comma separated list of permitted namespaces or regular expressions. 
-For example `namespace-1,my-ns-2,app-ns-[0-9]*`: in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` 
-as well as any namespace that matches the regular expression `app-ns-[0-9]*`.
+There are two general methods for push-based replication:
 
-Example:
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  annotations:
-    replicator.v1.mittwald.de/replicate-to: "my-ns-1,namespace-[0-9]*"
-data:
-  key1: <value>
-```
+- name-based; this allows you to either specify your target namespaces _by name_ or by regular expression (which should match the namespace name). To use name-based push replication, add a `replicator.v1.mittwald.de/replicate-to` annotation to your secret, role(binding) or configmap. The value of this annotation should contain a comma separated list of permitted namespaces or regular expressions. (Example: `namespace-1,my-ns-2,app-ns-[0-9]*` will replicate only into the namespaces `namespace-1` and `my-ns-2` as well as any namespace that matches the regular expression `app-ns-[0-9]*`).
+
+  Example:
+
+  ```yaml
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    annotations:
+      replicator.v1.mittwald.de/replicate-to: "my-ns-1,namespace-[0-9]*"
+  data:
+    key1: <value>
+  ```
+
+- label-based; this allows you to specify a label selector that a namespace should match in order for a secret, role(binding) or configmap to be replicated. To use label-based push replication, add a `replicator.v1.mittwald.de/replicate-to-matching` annotation to the object you want to replicate. The value of this annotation should contain an arbitrary [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors).
+
+  Example:
+
+  ```yaml
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    annotations:
+      replicator.v1.mittwald.de/replicate-to-matching: >
+        my-label=value,my-other-label,my-other-label notin (foo,bar)
+  data:
+    key1: <value>
+  ```
 
 ### "Pull-based" replication
 
