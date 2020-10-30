@@ -84,11 +84,21 @@ func TestSecretReplicator(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "test"}}
+	ns := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: prefix + "test",
+		},
+	}
 	_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	ns2 := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "test2"}}
+	ns2 := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: prefix + "test2",
+			Labels: map[string]string{
+				"foo": "bar",
+			}},
+	}
 	_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns2, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -516,6 +526,70 @@ func TestSecretReplicator(t *testing.T) {
 		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
 	})
 
+	t.Run("replication is pushed to other namespaces by label selector", func(t *testing.T) {
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source-pushed-to-other-ns-by-label",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateToMatching: "foo",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"foo": []byte("Hello Foo"),
+				"bar": []byte("Hello Bar"),
+			},
+		}
+
+		wg, stop := waitForSecrets(client, 2, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == source.Namespace && secret.Name == source.Name {
+					log.Debugf("AddFunc %+v", obj)
+					wg.Done()
+				} else if secret.Namespace == prefix+"test2" && secret.Name == source.Name {
+					log.Debugf("AddFunc %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		secrets2 := client.CoreV1().Secrets(prefix + "test2")
+		updTarget, err := secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
+
+		require.NoError(t, err)
+		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
+
+		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
+			UpdateFunc: func(wg *sync.WaitGroup, oldObj interface{}, newObj interface{}) {
+				secret := oldObj.(*corev1.Secret)
+				if secret.Namespace == prefix+"test2" && secret.Name == source.Name {
+					log.Debugf("UpdateFunc %+v -> %+v", oldObj, newObj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		updTarget, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		_, hasFoo := updTarget.Data["foo"]
+		require.False(t, hasFoo)
+		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
+	})
+
 	t.Run("replication updates existing secrets", func(t *testing.T) {
 		secrets2 := client.CoreV1().Secrets(prefix + "test2")
 
@@ -605,6 +679,109 @@ func TestSecretReplicator(t *testing.T) {
 		close(stop)
 
 		ns3 := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
+
+		wg, stop = waitForNamespaces(client, 1, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
+				ns := obj.(*corev1.Namespace)
+				if ns.Name == ns3.Name {
+					log.Debugf("AddFunc %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		wg2, stop2 := waitForSecrets(client, 1, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == ns3.Name && secret.Name == source.Name {
+					log.Debugf("AddFunc %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err = client.CoreV1().Namespaces().Create(context.TODO(), &ns3, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		defer func() {
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), ns3.Name, metav1.DeleteOptions{})
+		}()
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		waitWithTimeout(wg2, MaxWaitTime)
+		close(stop2)
+
+		secrets3 := client.CoreV1().Secrets(namespaceName)
+		updTarget, err := secrets3.Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
+
+		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
+			UpdateFunc: func(wg *sync.WaitGroup, objOld interface{}, objNew interface{}) {
+				secret := objOld.(*corev1.Secret)
+				if secret.Namespace == ns3.Name && secret.Name == source.Name {
+					log.Debugf("UpdateFunc %+v", objOld)
+					wg.Done()
+				}
+			},
+		})
+		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		updTarget, err = secrets3.Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		_, hasFoo := updTarget.Data["foo"]
+		require.False(t, hasFoo)
+		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
+	})
+
+	t.Run("secrets are replicated when new namespace is created with label", func(t *testing.T) {
+		namespaceName := prefix + "test-repl-new-ns-label"
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source6-with-label",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateToMatching: "foo=veryspecificvalue",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"foo": []byte("Hello Foo"),
+				"bar": []byte("Hello Bar"),
+			},
+		}
+
+		wg, stop := waitForSecrets(client, 1, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == source.Namespace && secret.Name == source.Name {
+					log.Debugf("AddFunc %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		ns3 := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespaceName,
+				Labels: map[string]string{
+					"foo": "veryspecificvalue",
+				},
+			},
+		}
 
 		wg, stop = waitForNamespaces(client, 1, EventHandlerFuncs{
 			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
