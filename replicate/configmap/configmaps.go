@@ -189,8 +189,16 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		}
 	}
 
+	labelsCopy := make(map[string]string)
+	if source.Labels != nil {
+		for key, value := range source.Labels {
+			labelsCopy[key] = value
+		}
+	}
+
 	sort.Strings(replicatedKeys)
 	resourceCopy.Name = source.Name
+	resourceCopy.Labels = labelsCopy
 	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")

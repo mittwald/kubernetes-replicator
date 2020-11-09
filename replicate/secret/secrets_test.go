@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -463,6 +464,10 @@ func TestSecretReplicator(t *testing.T) {
 	})
 
 	t.Run("replication is pushed to other namespaces", func(t *testing.T) {
+		sourceLabels := map[string]string{
+			"foo":   "bar",
+			"hello": "world",
+		}
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "source-pushed-to-other-ns",
@@ -470,6 +475,7 @@ func TestSecretReplicator(t *testing.T) {
 				Annotations: map[string]string{
 					common.ReplicateTo: prefix + "test2",
 				},
+				Labels: sourceLabels,
 			},
 			Type: corev1.SecretTypeOpaque,
 			Data: map[string][]byte{
@@ -501,6 +507,7 @@ func TestSecretReplicator(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, []byte("Hello Foo"), updTarget.Data["foo"])
+		require.True(t, reflect.DeepEqual(sourceLabels, updTarget.Labels))
 
 		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
 			UpdateFunc: func(wg *sync.WaitGroup, oldObj interface{}, newObj interface{}) {

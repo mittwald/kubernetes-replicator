@@ -126,7 +126,15 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		targetCopy.Annotations = make(map[string]string)
 	}
 
+	labelsCopy := make(map[string]string)
+	if source.Labels != nil {
+		for key, value := range source.Labels {
+			labelsCopy[key] = value
+		}
+	}
+
 	targetCopy.Name = source.Name
+	targetCopy.Labels = labelsCopy
 	targetCopy.Subjects = source.Subjects
 	targetCopy.RoleRef = source.RoleRef
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
