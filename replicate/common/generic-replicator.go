@@ -148,7 +148,6 @@ func (r *GenericReplicator) Run() {
 // annotations into newly created namespaces.
 func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	logger := log.WithField("kind", r.Kind).WithField("target", ns.Name)
-
 	for sourceKey := range r.ReplicateToList {
 		logger := logger.WithField("resource", sourceKey)
 		obj, exists, err := r.Store.GetByKey(sourceKey)
@@ -172,8 +171,6 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 			} else {
 				replicatedList = append(replicatedList, ns.Name)
 			}
-			key := MustGetKey(objectMeta)
-			logger.WithField("source", key).Infof("Replicated %s to: %v", key, replicatedList)
 		}
 	}
 
@@ -362,6 +359,8 @@ func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targe
 			))
 		} else {
 			replicatedTo = append(replicatedTo, namespace)
+			logger := log.WithField("source", cacheKey)
+			logger.Infof("Replicated %s to: %v", cacheKey, namespace.Name)
 		}
 	}
 
