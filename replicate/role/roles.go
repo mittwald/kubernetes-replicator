@@ -203,7 +203,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*rbacv1.Role)
 	logger.Debugf("Deleting %s", targetLocation)
-	if err := r.Client.CoreV1().Secrets(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
+	if err := r.Client.RbacV1().Roles(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}
 	return nil

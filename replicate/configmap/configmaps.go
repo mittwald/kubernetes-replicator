@@ -272,7 +272,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	if strings.Join(resourceKeys, ",") == object.Annotations[common.ReplicatedKeysAnnotation] {
 		logger.Debugf("Deleting %s", targetLocation)
-		if err := r.Client.CoreV1().Secrets(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
+		if err := r.Client.CoreV1().ConfigMaps(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 			return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 		}
 	} else {
