@@ -223,6 +223,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 }
 
 func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) (interface{}, error) {
+	fmt.Println("hello there")
 	dependentKey := common.MustGetKey(target)
 	logger := log.WithFields(log.Fields{
 		"kind":   r.Kind,
@@ -276,6 +277,26 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 			return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 		}
 	} else {
+		var patch []common.JSONPatchOperation
+		exists := make(map[string]bool)
+		for _, value := range resourceKeys {
+			exists[value] = true
+		}
+		for _, val := range strings.Split(object.Annotations[common.ReplicatedKeysAnnotation], ",") {
+			if exists[val] {
+				patch = append(patch, common.JSONPatchOperation{Operation: "remove", Path: fmt.Sprintf("/data/%s", val)})
+			}
+		}
+		patchBody, err := json.Marshal(&patch)
+		if err != nil {
+			return errors.Wrapf(err, "error while building patch body for confimap %s: %v", object, err)
+		}
+		s, err := r.Client.CoreV1().ConfigMaps(object.Namespace).Patch(context.TODO(), object.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "error while patching secret %s: %v", s, err)
+
+		}
+
 		logger.Debugf("Not deleting %s since it contains other keys then replicated.", targetLocation)
 	}
 
