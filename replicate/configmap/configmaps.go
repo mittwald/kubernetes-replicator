@@ -223,7 +223,6 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 }
 
 func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) (interface{}, error) {
-	fmt.Println("hello there")
 	dependentKey := common.MustGetKey(target)
 	logger := log.WithFields(log.Fields{
 		"kind":   r.Kind,
