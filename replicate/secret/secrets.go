@@ -267,12 +267,12 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 		}
 	} else {
 		var patch []common.JSONPatchOperation
-		exists := make(map[string]bool)
+		exists := make(map[string]struct{})
 		for _, value := range common.GetKeysFromBinaryMap(object.Data) {
-			exists[value] = true
+			exists[value] = struct{}{}
 		}
 		for _, val := range strings.Split(object.Annotations[common.ReplicatedKeysAnnotation], ",") {
-			if exists[val] {
+			if _, ok := exists[val]; ok {
 				patch = append(patch, common.JSONPatchOperation{Operation: "remove", Path: fmt.Sprintf("/data/%s", val)})
 			}
 		}
