@@ -276,15 +276,19 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 				patch = append(patch, common.JSONPatchOperation{Operation: "remove", Path: fmt.Sprintf("/data/%s", val)})
 			}
 		}
+		patch = append(patch, common.JSONPatchOperation{Operation: "remove", Path: fmt.Sprintf("/metadata/annotations/%s", strings.Replace(common.ReplicatedKeysAnnotation, "/", "~1", 1))})
+
 		patchBody, err := json.Marshal(&patch)
 		if err != nil {
 			return errors.Wrapf(err, "error while building patch body for confimap %s: %v", object, err)
 		}
+
 		s, err := r.Client.CoreV1().Secrets(object.Namespace).Patch(context.TODO(), object.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "error while patching secret %s: %v", s, err)
 
 		}
+
 		logger.Debugf("Not deleting %s since it contains other keys then replicated.", targetLocation)
 	}
 
