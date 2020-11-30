@@ -27,3 +27,7 @@ func PreviouslyPresentKeys(object *metav1.ObjectMeta) (map[string]struct{}, bool
 
 	return out, true
 }
+
+func JSONPatchPathEscape(annotation string) string {
+	return strings.ReplaceAll(annotation, "/", "~1")
+}
