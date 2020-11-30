@@ -59,7 +59,7 @@ func MustGetObject(obj interface{}) metav1.Object {
 
 func StringToPatternList(list string) (result []*regexp.Regexp) {
 	for _, s := range strings.Split(list, ",") {
-		s = fmt.Sprintf("^%s$", strings.TrimSpace(s))
+		s = BuildStrictRegex(s)
 		r, err := regexp.Compile(s)
 		if err != nil {
 			log.WithError(err).Errorf("Invalid regex '%s' in namespace string %s: %v", s, list, err)
