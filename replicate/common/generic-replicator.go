@@ -117,7 +117,7 @@ func (r *GenericReplicator) IsReplicationPermitted(object *metav1.ObjectMeta, so
 	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
 	allowed := false
 	for _, ns := range allowedNamespaces {
-		ns := "^" + strings.TrimSpace(ns) + "$"
+		ns := fmt.Sprintf("^%s$", strings.TrimSpace(ns))
 
 		if matched, _ := regexp.MatchString(ns, object.Namespace); matched {
 			log.Tracef("Namespace '%s' matches '%s' -- allowing replication", object.Namespace, ns)
