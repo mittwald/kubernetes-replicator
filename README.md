@@ -48,7 +48,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ### Role and RoleBinding replication
 
-In order to replicate roles and rolebindings, the service account tied to the replicator needs to have the correct permissions. The chart currently offers two options to accomplish this:
+In order to replicate Roles and RoleBindings, the service account tied to the replicator needs to have the correct permissions. The chart currently offers two options to accomplish this:
 
 - Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
 
@@ -66,7 +66,7 @@ In order to replicate roles and rolebindings, the service account tied to the re
        "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
   ```
 
-  These settings permit the replication of roles with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
+  These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
 
 ### "Push-based" replication
 
