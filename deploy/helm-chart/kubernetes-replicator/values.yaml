@@ -14,9 +14,9 @@ serviceAccount:
   create: true
   annotations: {}
   name:
-  apiGroups: [ "", "apps", "batch", "extensions" ] 
-  resources: ["secrets", "configmaps", "roles", "rolebindings",
-     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+  apiGroups: [ "" ] 
+  resources: ["secrets", "configmaps", "roles", "rolebindings" ]
+
 podSecurityContext: {}
   # fsGroup: 2000
 
