@@ -20,15 +20,17 @@ rules:
   - apiGroups: [ "" ]
     resources: [ "namespaces" ]
     verbs: [ "get", "watch", "list" ]
+{{- range $index, $val := .Values.serviceAccount.privileges }}
   - apiGroups:
-      {{- range .Values.serviceAccount.apiGroups }}
-        - {{ . | quote }}
-      {{- end }}
-    resources: 
-      {{- range .Values.serviceAccount.resources }}
-        - {{ . | quote }}
-      {{- end }}
+    {{- range $val.apiGroups }}
+      - {{ . | quote }}
+    {{- end }}
+    resources:
+    {{- range $val.resources }}
+      - {{ . | quote }}
+    {{- end }}
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete", "describe"]
+{{- end }}
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]

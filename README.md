@@ -52,7 +52,7 @@ To create a new role, your own account needs to have at least the same set of pr
 
 - Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
 
-- Set the lists of needed api groups and resources explicitely. The values `serviceAccount.apiGroups` and `serviceAccount.resources` can be used to specify which privileges the replicator is allowed to handle.
+- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a map that contains pairs of api group and resource lists. 
   
   Example:
 
@@ -61,9 +61,14 @@ To create a new role, your own account needs to have at least the same set of pr
     create: true
     annotations: {}
     name:
-    apiGroups: [ "", "apps", "batch", "extensions" ] 
-    resources: ["secrets", "configmaps", "roles", "rolebindings",
-       "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+      privileges:
+    one:
+      apiGroups: [ "", "apps", "extensions" ] 
+      resources: ["secrets", "configmaps", "roles", "rolebindings",
+     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+    two:
+      apiGroups: [ "batch" ]
+      resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
   ```
 
   These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
