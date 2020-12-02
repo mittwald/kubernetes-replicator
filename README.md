@@ -46,6 +46,28 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ## Usage
 
+### Role and rolebinding replication
+
+In order to replicate roles and rolebindings, the service account tied to the replicator needs to have the correct permissions. The chart currently offers two options to accomplish this:
+
+- Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
+
+- Set the lists of needed api groups and resources explicitely. The values `serviceAccount.apiGroups` and `serviceAccount.resources`, you can specify what priiliges the replicator is allowed to replicate.
+  
+  Example:
+
+  ```yaml
+  serviceAccount:
+  create: true
+  annotations: {}
+  name:
+  apiGroups: [ "", "apps", "batch", "extensions" ] 
+  resources: ["secrets", "configmaps", "roles", "rolebindings",
+     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+  ```
+
+  These settings permit the replication of roles with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
+
 ### "Push-based" replication
 
 Push-based replication will "push out" the secrets, configmaps, roles and rolebindings into namespaces when new namespaces are created or when the secret/configmap/roles/rolebindings changes.
