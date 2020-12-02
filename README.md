@@ -48,7 +48,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ### Role and RoleBinding replication
 
-In order to replicate Roles and RoleBindings, the service account tied to the replicator needs to have the correct permissions. The chart currently offers two options to accomplish this:
+To create a new role, your own account needs to have at least the same set of privileges as the role you're trying to create. The chart currently offers two options to grant these permissions to the service account used by the replicator:
 
 - Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
 
