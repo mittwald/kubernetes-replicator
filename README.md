@@ -46,7 +46,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 ## Usage
 
-### Role and rolebinding replication
+### Role and RoleBinding replication
 
 In order to replicate roles and rolebindings, the service account tied to the replicator needs to have the correct permissions. The chart currently offers two options to accomplish this:
 
