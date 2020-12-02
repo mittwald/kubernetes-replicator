@@ -58,12 +58,12 @@ In order to replicate roles and rolebindings, the service account tied to the re
 
   ```yaml
   serviceAccount:
-  create: true
-  annotations: {}
-  name:
-  apiGroups: [ "", "apps", "batch", "extensions" ] 
-  resources: ["secrets", "configmaps", "roles", "rolebindings",
-     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+    create: true
+    annotations: {}
+    name:
+    apiGroups: [ "", "apps", "batch", "extensions" ] 
+    resources: ["secrets", "configmaps", "roles", "rolebindings",
+       "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
   ```
 
   These settings permit the replication of roles with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
