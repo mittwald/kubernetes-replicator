@@ -52,7 +52,7 @@ In order to replicate roles and rolebindings, the service account tied to the re
 
 - Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
 
-- Set the lists of needed api groups and resources explicitely. The values `serviceAccount.apiGroups` and `serviceAccount.resources`, you can specify what priiliges the replicator is allowed to replicate.
+- Set the lists of needed api groups and resources explicitely. The values `serviceAccount.apiGroups` and `serviceAccount.resources` can be used to specify which privileges the replicator is allowed to handle.
   
   Example:
 
