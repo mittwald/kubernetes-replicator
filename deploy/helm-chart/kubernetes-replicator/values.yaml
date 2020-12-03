@@ -15,12 +15,10 @@ serviceAccount:
   annotations: {}
   name:
   privileges:
-    one:
-      apiGroups: [ "", "apps", "extensions" ] 
+    - apiGroups: [ "", "apps", "extensions" ] 
       resources: ["secrets", "configmaps", "roles", "rolebindings",
-     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
-    two:
-      apiGroups: [ "batch" ]
+      "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+    - apiGroups: [ "batch" ]
       resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
 podSecurityContext: {}
   # fsGroup: 2000
