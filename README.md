@@ -61,14 +61,12 @@ To create a new role, your own account needs to have at least the same set of pr
     create: true
     annotations: {}
     name:
-      privileges:
-    one:
-      apiGroups: [ "", "apps", "extensions" ] 
-      resources: ["secrets", "configmaps", "roles", "rolebindings",
-     "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
-    two:
-      apiGroups: [ "batch" ]
-      resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+    privileges:
+      - apiGroups: [ "", "apps", "extensions" ] 
+        resources: ["secrets", "configmaps", "roles", "rolebindings",
+        "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+      - apiGroups: [ "batch" ]
+        resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
   ```
 
   These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
