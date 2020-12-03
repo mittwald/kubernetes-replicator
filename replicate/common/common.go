@@ -37,4 +37,7 @@ func BuildStrictRegex(regex string) string {
 		reg = reg + "$"
 	}
 	return reg
+
+func JSONPatchPathEscape(annotation string) string {
+	return strings.ReplaceAll(annotation, "/", "~1")
 }
