@@ -23,6 +23,8 @@ type Replicator struct {
 	*common.GenericReplicator
 }
 
+const sleepTime = 100 * time.Millisecond
+
 // NewReplicator creates a new secret replicator
 func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
 	repl := Replicator{
@@ -142,11 +144,30 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	var obj interface{}
 	if exists {
-		logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
+		// Wait for Role-replication to catch up
+		for i := 0; i < 5; i++ {
+			_, err = r.Client.RbacV1().Roles(target.Name).Get(context.TODO(), targetCopy.RoleRef.Name, metav1.GetOptions{})
+			if err == nil {
+				logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
+				obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
+				break
+			} else {
+				time.Sleep(sleepTime)
+			}
+
+		}
 	} else {
-		logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
+		for i := 0; i < 5; i++ {
+			_, err = r.Client.RbacV1().Roles(target.Name).Get(context.TODO(), targetCopy.RoleRef.Name, metav1.GetOptions{})
+			if err == nil {
+				logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
+				obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
+				break
+			} else {
+				time.Sleep(sleepTime)
+			}
+
+		}
 	}
 	if err != nil {
 		return errors.Wrapf(err, "Failed to update roleBinding %s/%s", target.Name, targetCopy.Name)
