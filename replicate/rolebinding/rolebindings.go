@@ -144,29 +144,17 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	var obj interface{}
 	if exists {
-		// Wait for Role-replication to catch up
-		for i := 0; i < 5; i++ {
-			_, err = r.Client.RbacV1().Roles(target.Name).Get(context.TODO(), targetCopy.RoleRef.Name, metav1.GetOptions{})
-			if err == nil {
-				logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
-				obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
-				break
-			} else {
-				time.Sleep(sleepTime)
-			}
-
+		err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
+		if err == nil {
+			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
+			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
-	} else {
-		for i := 0; i < 5; i++ {
-			_, err = r.Client.RbacV1().Roles(target.Name).Get(context.TODO(), targetCopy.RoleRef.Name, metav1.GetOptions{})
-			if err == nil {
-				logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
-				obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
-				break
-			} else {
-				time.Sleep(sleepTime)
-			}
 
+	} else {
+		err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
+		if err == nil {
+			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
+			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 		}
 	}
 	if err != nil {
@@ -178,6 +166,19 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	}
 
 	return nil
+}
+
+//Checks if Role required for RoleBinding exits. Retries a few times before returning error to allow replication to catch up
+func (r *Replicator) canReplicate(targetNameSpace string, roleRef string) (err error) {
+	for i := 0; i < 5; i++ {
+		_, err = r.Client.RbacV1().Roles(targetNameSpace).Get(context.TODO(), roleRef, metav1.GetOptions{})
+		if err == nil {
+			break
+		} else {
+			time.Sleep(sleepTime)
+		}
+	}
+	return
 }
 
 func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) (interface{}, error) {
