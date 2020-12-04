@@ -143,15 +143,13 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
 	var obj interface{}
+	err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
 	if exists {
-		err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
 		if err == nil {
 			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
-
 	} else {
-		err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
 		if err == nil {
 			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
