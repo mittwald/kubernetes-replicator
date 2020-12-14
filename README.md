@@ -11,6 +11,7 @@ secrets and config maps available in multiple namespaces.
     1. [Using Helm](#using-helm)
     1. [Manual](#manual)
 1. [Usage](#usage)
+    1. ["Role and RoleBinding replication](#role-and-rolebinding-replication)
     1. ["Push-based" replication](#push-based-replication)
     1. ["Pull-based" replication](#pull-based-replication)
         1. [1. Create the source secret](#step-1-create-the-source-secret)
@@ -52,7 +53,7 @@ To create a new role, your own account needs to have at least the same set of pr
 
 - Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
 
-- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a map that contains pairs of api group and resource lists. 
+- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a list that contains pairs of api group and resource lists. 
   
   Example:
 
