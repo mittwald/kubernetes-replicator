@@ -27,3 +27,18 @@ func PreviouslyPresentKeys(object *metav1.ObjectMeta) (map[string]struct{}, bool
 
 	return out, true
 }
+
+func BuildStrictRegex(regex string) string {
+	reg := strings.TrimSpace(regex)
+	if !strings.HasPrefix(reg, "^") {
+		reg = "^" + reg
+	}
+	if !strings.HasSuffix(reg, "$") {
+		reg = reg + "$"
+	}
+	return reg
+}
+
+func JSONPatchPathEscape(annotation string) string {
+	return strings.ReplaceAll(annotation, "/", "~1")
+}
