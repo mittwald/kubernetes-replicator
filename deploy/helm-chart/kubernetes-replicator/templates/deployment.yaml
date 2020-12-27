@@ -13,6 +13,9 @@ spec:
     metadata:
       labels:
         {{- include "kubernetes-replicator.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
     {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
