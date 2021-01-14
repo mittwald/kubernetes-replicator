@@ -123,7 +123,7 @@ func TestRoleReplicator(t *testing.T) {
 			Rules: []rbacv1.PolicyRule{{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs: []string{"list", "get", "watch"},
+				Verbs:     []string{"list", "get", "watch"},
 			}},
 		}
 
@@ -137,7 +137,7 @@ func TestRoleReplicator(t *testing.T) {
 			},
 		}
 
-		wg, stop := waitForRoles(client, 2, EventHandlerFuncs{
+		wg, stop := waitForRoles(client, 3, EventHandlerFuncs{
 			AddFunc: func(wg *sync.WaitGroup, obj interface{}) {
 				role := obj.(*rbacv1.Role)
 				if role.Namespace == source.Namespace && role.Name == source.Name {
@@ -171,7 +171,6 @@ func TestRoleReplicator(t *testing.T) {
 		require.EqualValues(t, source.Rules, updTarget.Rules)
 	})
 
-
 	t.Run("replication is pushed to other namespaces", func(t *testing.T) {
 		source := rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
@@ -184,7 +183,7 @@ func TestRoleReplicator(t *testing.T) {
 			Rules: []rbacv1.PolicyRule{{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs: []string{"list", "get", "watch"},
+				Verbs:     []string{"list", "get", "watch"},
 			}},
 		}
 
@@ -247,7 +246,7 @@ func TestRoleReplicator(t *testing.T) {
 			Rules: []rbacv1.PolicyRule{{
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
-				Verbs: []string{"list", "get", "watch"},
+				Verbs:     []string{"list", "get", "watch"},
 			}},
 		}
 
