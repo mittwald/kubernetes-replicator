@@ -233,8 +233,6 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 		} else if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, list.Items); err != nil {
 			logger.WithError(err).Errorf("could not replicate object to other namespaces")
 		}
-
-		return
 	} else {
 		delete(r.ReplicateToList, sourceKey)
 	}
@@ -354,7 +352,7 @@ func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targe
 	cacheKey := MustGetKey(obj)
 
 	for _, namespace := range targets {
-		if err := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
+		if err = r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
 			err = multierror.Append(errors.Wrapf(err, "Failed to replicate %s %s -> %s: %v",
 				r.Kind, cacheKey, namespace.Name, err,
 			))
@@ -434,6 +432,24 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 			r.DeleteResources(source, list, filters)
 		}
 	}
+
+	namespaceSelectorString, replicateToMatching := objMeta.GetAnnotations()[ReplicateToMatching]
+	if replicateToMatching {
+		namespaceSelector, err := labels.Parse(namespaceSelectorString)
+		if err != nil {
+			err = errors.Wrapf(err, "Failed parse namespace selector: %v", err)
+			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
+		}
+
+		var namespaces *v1.NamespaceList
+		namespaces, err = r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: namespaceSelector.String()})
+		if err != nil {
+			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
+			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
+		} else {
+			r.DeleteResourcesByLabels(source, namespaces)
+		}
+	}
 }
 
 func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.NamespaceList, filters []string) {
@@ -444,6 +460,12 @@ func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.Namespa
 				r.DeleteResource(namespace, source)
 			}
 		}
+	}
+}
+
+func (r *GenericReplicator) DeleteResourcesByLabels(source interface{}, list *v1.NamespaceList) {
+	for _, namespace := range list.Items {
+		r.DeleteResource(namespace, source)
 	}
 }
 
