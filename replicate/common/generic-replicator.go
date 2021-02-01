@@ -433,6 +433,7 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 		}
 	}
 
+	// delete replicated resources in namespaces that match labels
 	namespaceSelectorString, replicateToMatching := objMeta.GetAnnotations()[ReplicateToMatching]
 	if replicateToMatching {
 		namespaceSelector, err := labels.Parse(namespaceSelectorString)
@@ -463,6 +464,7 @@ func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.Namespa
 	}
 }
 
+// DeleteResourcesByLabels deletes resources in a list of namespaces acquired by evaluating namespace labels
 func (r *GenericReplicator) DeleteResourcesByLabels(source interface{}, list *v1.NamespaceList) {
 	for _, namespace := range list.Items {
 		r.DeleteResource(namespace, source)
