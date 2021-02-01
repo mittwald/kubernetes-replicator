@@ -243,6 +243,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 		if err != nil {
 			delete(r.ReplicateToMatchingList, sourceKey)
 			logger.WithError(err).Error("failed to parse label selector")
+
 			return
 		}
 
@@ -352,7 +353,7 @@ func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targe
 	cacheKey := MustGetKey(obj)
 
 	for _, namespace := range targets {
-		if err = r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
+		if err := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
 			err = multierror.Append(errors.Wrapf(err, "Failed to replicate %s %s -> %s: %v",
 				r.Kind, cacheKey, namespace.Name, err,
 			))
