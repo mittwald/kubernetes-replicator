@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/labels"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -78,6 +79,7 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 	)
 
 	namespaceWatcher.OnNamespaceAdded(config.Client, config.ResyncPeriod, repl.NamespaceAdded)
+	namespaceWatcher.OnNamespaceUpdated(config.Client, config.ResyncPeriod, repl.NamespaceUpdated)
 
 	repl.Store = store
 	repl.Controller = controller
@@ -196,6 +198,53 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 			logger.WithError(err).Error("error while replicating object to namespace")
 		}
 	}
+}
+
+// NamespaceUpdated checks if namespace's labels changed and deletes any 'replicate-to-matching' resources
+// the namespace no longer qualifies for. Then it attempts to replicate resources into the updated ns based
+// on the updated set of labels
+func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Namespace) {
+	logger := log.WithField("kind", r.Kind).WithField("target", nsNew.Name)
+	// check if labels changed
+	labelsEqual := reflect.DeepEqual(nsNew.Labels, nsOld.Labels)
+	if  labelsEqual{
+		logger.Debug("labels didn't change")
+	} else {
+		// delete any resources where namespace labels no longer match
+		oldLabels := GetKeysFromStringMap(nsOld.Labels)
+		logger.Debugf("old labels of ns %s : %v", nsOld.Name, oldLabels)
+		newLabels := GetKeysFromStringMap(nsNew.Labels)
+		logger.Debugf("new Labels of ns %s : %v", nsNew.Name, newLabels)
+		removedLabelsKeys := GetDifferenceBetweenStringLists(oldLabels, newLabels)
+		logger.Debugf("removed labels of ns %s: %v", nsNew.Name, removedLabelsKeys)
+		deletedLabels := labels.Set{}
+		for _, key := range removedLabelsKeys {
+			deletedLabels[key] = nsOld.Labels[key]
+		}
+		// check 'replicate-to-matching' resources against the deleted labels
+		for sourceKey, selector := range r.ReplicateToMatchingList {
+			if selector.Matches(deletedLabels) {
+				obj, exists, err := r.Store.GetByKey(sourceKey)
+				if err != nil {
+					log.WithError(err).Error("error fetching object from store")
+					continue
+				} else if !exists {
+					log.Warn("object not found in store")
+					continue
+				}
+				// delete resource from the updated namespace
+				logger.Infof("removed %s %s from %s", r.Kind, sourceKey, nsNew.Name)
+				r.DeleteResourcesByLabels(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
+			}
+		}
+	}
+
+	// replicate resources to updated ns
+	if !labelsEqual {
+		logger.Infof("labels of namespace %s changed, attempting to replicate %ss", nsNew.Name, r.Kind)
+		r.NamespaceAdded(nsNew)
+	}
+
 }
 
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation

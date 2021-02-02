@@ -19,6 +19,8 @@ var namespaceWatcher NamespaceWatcher
 
 type AddFunc func(obj *v1.Namespace)
 
+type UpdateFunc func(old *v1.Namespace, new *v1.Namespace)
+
 type NamespaceWatcher struct {
 	doOnce sync.Once
 
@@ -26,6 +28,7 @@ type NamespaceWatcher struct {
 	NamespaceController cache.Controller
 
 	AddFuncs []AddFunc
+	UpdateFuncs []UpdateFunc
 }
 
 // create will create a new namespace if one does not already exist. If it does, it will do nothing.
@@ -35,6 +38,14 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 			namespace := obj.(*v1.Namespace)
 			for _, addFunc := range nw.AddFuncs {
 				go addFunc(namespace)
+			}
+		}
+
+		namespaceUpdated := func(old interface{}, new interface{}) {
+			nsOld := old.(*v1.Namespace)
+			nsNew := new.(*v1.Namespace)
+			for _, updateFunc := range nw.UpdateFuncs {
+				go updateFunc(nsOld, nsNew)
 			}
 		}
 
@@ -51,6 +62,9 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 			resyncPeriod,
 			cache.ResourceEventHandlerFuncs{
 				AddFunc: namespaceAdded,
+				UpdateFunc: func(old, new interface{}) {
+					namespaceUpdated(old, new)
+				},
 			},
 		)
 
@@ -64,4 +78,10 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 func (nw *NamespaceWatcher) OnNamespaceAdded(client kubernetes.Interface, resyncPeriod time.Duration, addFunc AddFunc) {
 	nw.create(client, resyncPeriod)
 	nw.AddFuncs = append(nw.AddFuncs, addFunc)
+}
+
+// OnNamespaceUpdated will add another method to a list of functions to be called when a namespace is updated
+func (nw *NamespaceWatcher) OnNamespaceUpdated(client kubernetes.Interface, resyncPeriod time.Duration, updateFunc UpdateFunc) {
+	nw.create(client, resyncPeriod)
+	nw.UpdateFuncs = append(nw.UpdateFuncs, updateFunc)
 }
