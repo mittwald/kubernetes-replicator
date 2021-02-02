@@ -81,6 +81,10 @@ There are two general methods for push-based replication:
     key1: <value>
   ```
 
+When the labels of a namespace are changed, any resources that were replicated by labels into the namespace and no longer qualify for replication under the new set of labels will be deleted. Afterwards any resources that now match the updated labels will be replicated into the namespace.
+
+It is possible to use both methods of push-based replication together in a single resource, by specifying both annotations.
+
 ### "Pull-based" replication
 
 Pull-based replication makes it possible to create a secret/configmap/role/rolebindings and select a "source" resource 

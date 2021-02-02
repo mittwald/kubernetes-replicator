@@ -237,14 +237,11 @@ func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Name
 				r.DeleteResourcesByLabels(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
 			}
 		}
-	}
 
-	// replicate resources to updated ns
-	if !labelsEqual {
+		// replicate resources to updated ns
 		logger.Infof("labels of namespace %s changed, attempting to replicate %ss", nsNew.Name, r.Kind)
 		r.NamespaceAdded(nsNew)
 	}
-
 }
 
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation
