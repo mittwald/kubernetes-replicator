@@ -20,9 +20,11 @@ rules:
   - apiGroups: [ "" ]
     resources: [ "namespaces" ]
     verbs: [ "get", "watch", "list" ]
-  - apiGroups: [""] # "" indicates the core API group
-    resources: ["secrets", "configmaps"]
-    verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
+{{- range .Values.serviceAccount.privileges }}
+  - apiGroups: {{ .apiGroups | toYaml | nindent 6 }}
+    resources: {{ .resources | toYaml | nindent 6 }}
+    verbs: ["get", "watch", "list", "create", "update", "patch", "delete", "describe"]
+{{- end }}
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
@@ -35,7 +37,7 @@ metadata:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 roleRef:
   kind: ClusterRole
-  name: {{ include "kubernetes-replicator.fullname" . }}
+  name: {{ include "kubernetes-replicator.roleName" . }}
   apiGroup: rbac.authorization.k8s.io
 subjects:
   - kind: ServiceAccount

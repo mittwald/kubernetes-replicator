@@ -11,6 +11,7 @@ secrets and config maps available in multiple namespaces.
     1. [Using Helm](#using-helm)
     1. [Manual](#manual)
 1. [Usage](#usage)
+    1. ["Role and RoleBinding replication](#role-and-rolebinding-replication)
     1. ["Push-based" replication](#push-based-replication)
     1. ["Pull-based" replication](#pull-based-replication)
         1. [1. Create the source secret](#step-1-create-the-source-secret)
@@ -45,6 +46,31 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 ```
 
 ## Usage
+
+### Role and RoleBinding replication
+
+To create a new role, your own account needs to have at least the same set of privileges as the role you're trying to create. The chart currently offers two options to grant these permissions to the service account used by the replicator:
+
+- Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
+
+- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a list that contains pairs of api group and resource lists. 
+  
+  Example:
+
+  ```yaml
+  serviceAccount:
+    create: true
+    annotations: {}
+    name:
+    privileges:
+      - apiGroups: [ "", "apps", "extensions" ] 
+        resources: ["secrets", "configmaps", "roles", "rolebindings",
+        "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+      - apiGroups: [ "batch" ]
+        resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
+  ```
+
+  These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
 
 ### "Push-based" replication
 
