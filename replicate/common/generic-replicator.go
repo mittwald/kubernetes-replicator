@@ -391,9 +391,9 @@ func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targe
 	cacheKey := MustGetKey(obj)
 
 	for _, namespace := range targets {
-		if err := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); err != nil {
-			err = multierror.Append(errors.Wrapf(err, "Failed to replicate %s %s -> %s: %v",
-				r.Kind, cacheKey, namespace.Name, err,
+		if innerErr := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); innerErr != nil {
+			err = multierror.Append(err, errors.Wrapf(innerErr, "Failed to replicate %s %s -> %s: %v",
+				r.Kind, cacheKey, namespace.Name, innerErr,
 			))
 		} else {
 			replicatedTo = append(replicatedTo, namespace)

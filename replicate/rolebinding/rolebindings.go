@@ -23,6 +23,8 @@ type Replicator struct {
 	*common.GenericReplicator
 }
 
+const sleepTime = 100 * time.Millisecond
+
 // NewReplicator creates a new secret replicator
 func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
 	repl := Replicator{
@@ -141,12 +143,17 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
 	var obj interface{}
+	err = r.canReplicate(target.Name, targetCopy.RoleRef.Name)
 	if exists {
-		logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
+		if err == nil {
+			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
+			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
+		}
 	} else {
-		logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
-		obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
+		if err == nil {
+			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
+			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
+		}
 	}
 	if err != nil {
 		return errors.Wrapf(err, "Failed to update roleBinding %s/%s", target.Name, targetCopy.Name)
@@ -157,6 +164,19 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	}
 
 	return nil
+}
+
+//Checks if Role required for RoleBinding exits. Retries a few times before returning error to allow replication to catch up
+func (r *Replicator) canReplicate(targetNameSpace string, roleRef string) (err error) {
+	for i := 0; i < 5; i++ {
+		_, err = r.Client.RbacV1().Roles(targetNameSpace).Get(context.TODO(), roleRef, metav1.GetOptions{})
+		if err == nil {
+			break
+		} else {
+			time.Sleep(sleepTime)
+		}
+	}
+	return
 }
 
 func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) (interface{}, error) {
