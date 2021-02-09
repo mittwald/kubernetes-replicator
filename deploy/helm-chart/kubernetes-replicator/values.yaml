@@ -40,3 +40,7 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+podLabels: {}
+
+podAnnotations: {}
