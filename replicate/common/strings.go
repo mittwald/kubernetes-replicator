@@ -70,27 +70,3 @@ func StringToPatternList(list string) (result []*regexp.Regexp) {
 
 	return
 }
-
-// GetDifferenceBetweenStringLists returns any entry that is in list a, but not in list b
-func GetDifferenceBetweenStringLists(a, b []string) []string {
-	if len(b) == 0 {
-		return a
-	}
-
-	if len(a) == 0 {
-		return []string{}
-	}
-
-	compare := make(map[string]struct{}, len(b))
-	for _, entry := range b {
-		compare[entry] = struct{}{}
-	}
-	var diff []string
-	for _, entry := range a {
-		if _, found := compare[entry]; !found {
-			diff = append(diff, entry)
-		}
-	}
-
-	return diff
-}

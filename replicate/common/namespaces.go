@@ -27,7 +27,7 @@ type NamespaceWatcher struct {
 	NamespaceStore      cache.Store
 	NamespaceController cache.Controller
 
-	AddFuncs []AddFunc
+	AddFuncs    []AddFunc
 	UpdateFuncs []UpdateFunc
 }
 

@@ -206,24 +206,16 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Namespace) {
 	logger := log.WithField("kind", r.Kind).WithField("target", nsNew.Name)
 	// check if labels changed
-	labelsEqual := reflect.DeepEqual(nsNew.Labels, nsOld.Labels)
-	if  labelsEqual{
+	if reflect.DeepEqual(nsNew.Labels, nsOld.Labels) {
 		logger.Debug("labels didn't change")
+		return
 	} else {
 		// delete any resources where namespace labels no longer match
-		oldLabels := GetKeysFromStringMap(nsOld.Labels)
-		logger.Debugf("old labels of ns %s : %v", nsOld.Name, oldLabels)
-		newLabels := GetKeysFromStringMap(nsNew.Labels)
-		logger.Debugf("new Labels of ns %s : %v", nsNew.Name, newLabels)
-		removedLabelsKeys := GetDifferenceBetweenStringLists(oldLabels, newLabels)
-		logger.Debugf("removed labels of ns %s: %v", nsNew.Name, removedLabelsKeys)
-		deletedLabels := labels.Set{}
-		for _, key := range removedLabelsKeys {
-			deletedLabels[key] = nsOld.Labels[key]
-		}
+		var newLabelSet labels.Set
+		newLabelSet = nsNew.Labels
 		// check 'replicate-to-matching' resources against the deleted labels
 		for sourceKey, selector := range r.ReplicateToMatchingList {
-			if selector.Matches(deletedLabels) {
+			if !selector.Matches(newLabelSet) {
 				obj, exists, err := r.Store.GetByKey(sourceKey)
 				if err != nil {
 					log.WithError(err).Error("error fetching object from store")
@@ -234,7 +226,7 @@ func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Name
 				}
 				// delete resource from the updated namespace
 				logger.Infof("removed %s %s from %s", r.Kind, sourceKey, nsNew.Name)
-				r.DeleteResourcesByLabels(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
+				r.DeleteResourceInNamespaces(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
 			}
 		}
 
@@ -495,7 +487,7 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
 			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
 		} else {
-			r.DeleteResourcesByLabels(source, namespaces)
+			r.DeleteResourceInNamespaces(source, namespaces)
 		}
 	}
 }
@@ -511,8 +503,8 @@ func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.Namespa
 	}
 }
 
-// DeleteResourcesByLabels deletes resources in a list of namespaces acquired by evaluating namespace labels
-func (r *GenericReplicator) DeleteResourcesByLabels(source interface{}, list *v1.NamespaceList) {
+// DeleteResourceInNamespaces deletes resources in a list of namespaces acquired by evaluating namespace labels
+func (r *GenericReplicator) DeleteResourceInNamespaces(source interface{}, list *v1.NamespaceList) {
 	for _, namespace := range list.Items {
 		r.DeleteResource(namespace, source)
 	}
