@@ -61,3 +61,10 @@ Create the name of the service account to use
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
+{{- define "kubernetes-replicator.roleName" -}}
+{{- if .Values.grantClusterAdmin -}}
+    {{ "cluster-admin" }}
+{{- else -}}
+    {{ (include "kubernetes-replicator.fullname" .) }}
+{{- end -}}
+{{- end -}}
