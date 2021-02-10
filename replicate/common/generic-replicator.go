@@ -214,9 +214,11 @@ func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Name
 		// delete any resources where namespace labels no longer match
 		var newLabelSet labels.Set
 		newLabelSet = nsNew.Labels
+		var oldLabelSet labels.Set
+		oldLabelSet = nsOld.Labels
 		// check 'replicate-to-matching' resources against new labels
 		for sourceKey, selector := range r.ReplicateToMatchingList {
-			if !selector.Matches(newLabelSet) {
+			if selector.Matches(oldLabelSet) && !selector.Matches(newLabelSet) {
 				obj, exists, err := r.Store.GetByKey(sourceKey)
 				if err != nil {
 					log.WithError(err).Error("error fetching object from store")
