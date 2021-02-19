@@ -482,15 +482,15 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 		if err != nil {
 			err = errors.Wrapf(err, "Failed parse namespace selector: %v", err)
 			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
-		}
-
-		var namespaces *v1.NamespaceList
-		namespaces, err = r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: namespaceSelector.String()})
-		if err != nil {
-			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
-			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
 		} else {
-			r.DeleteResourceInNamespaces(source, namespaces)
+			var namespaces *v1.NamespaceList
+			namespaces, err = r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: namespaceSelector.String()})
+			if err != nil {
+				err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
+				logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
+			} else {
+				r.DeleteResourceInNamespaces(source, namespaces)
+			}
 		}
 	}
 }

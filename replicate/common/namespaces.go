@@ -62,9 +62,7 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 			resyncPeriod,
 			cache.ResourceEventHandlerFuncs{
 				AddFunc: namespaceAdded,
-				UpdateFunc: func(old, new interface{}) {
-					namespaceUpdated(old, new)
-				},
+				UpdateFunc: namespaceUpdated,
 			},
 		)
 
