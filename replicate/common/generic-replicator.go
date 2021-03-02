@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/apimachinery/pkg/labels"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -78,6 +79,7 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 	)
 
 	namespaceWatcher.OnNamespaceAdded(config.Client, config.ResyncPeriod, repl.NamespaceAdded)
+	namespaceWatcher.OnNamespaceUpdated(config.Client, config.ResyncPeriod, repl.NamespaceUpdated)
 
 	repl.Store = store
 	repl.Controller = controller
@@ -198,6 +200,45 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	}
 }
 
+// NamespaceUpdated checks if namespace's labels changed and deletes any 'replicate-to-matching' resources
+// the namespace no longer qualifies for. Then it attempts to replicate resources into the updated ns based
+// on the updated set of labels
+func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Namespace) {
+	logger := log.WithField("kind", r.Kind).WithField("target", nsNew.Name)
+	// check if labels changed
+	if reflect.DeepEqual(nsNew.Labels, nsOld.Labels) {
+		logger.Debug("labels didn't change")
+		return
+	} else {
+		logger.Infof("labels of namespace %s changed, attempting to delete %ss that no longer match", nsNew.Name, r.Kind)
+		// delete any resources where namespace labels no longer match
+		var newLabelSet labels.Set
+		newLabelSet = nsNew.Labels
+		var oldLabelSet labels.Set
+		oldLabelSet = nsOld.Labels
+		// check 'replicate-to-matching' resources against new labels
+		for sourceKey, selector := range r.ReplicateToMatchingList {
+			if selector.Matches(oldLabelSet) && !selector.Matches(newLabelSet) {
+				obj, exists, err := r.Store.GetByKey(sourceKey)
+				if err != nil {
+					log.WithError(err).Error("error fetching object from store")
+					continue
+				} else if !exists {
+					log.Warn("object not found in store")
+					continue
+				}
+				// delete resource from the updated namespace
+				logger.Infof("removed %s %s from %s", r.Kind, sourceKey, nsNew.Name)
+				r.DeleteResourceInNamespaces(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
+			}
+		}
+
+		// replicate resources to updated ns
+		logger.Infof("labels of namespace %s changed, attempting to replicate %ss", nsNew.Name, r.Kind)
+		r.NamespaceAdded(nsNew)
+	}
+}
+
 // ResourceAdded checks resources with ReplicateTo or ReplicateFromAnnotation annotation
 func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	objectMeta := MustGetObject(obj)
@@ -233,8 +274,6 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 		} else if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, list.Items); err != nil {
 			logger.WithError(err).Errorf("could not replicate object to other namespaces")
 		}
-
-		return
 	} else {
 		delete(r.ReplicateToList, sourceKey)
 	}
@@ -245,6 +284,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 		if err != nil {
 			delete(r.ReplicateToMatchingList, sourceKey)
 			logger.WithError(err).Error("failed to parse label selector")
+
 			return
 		}
 
@@ -434,6 +474,25 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 			r.DeleteResources(source, list, filters)
 		}
 	}
+
+	// delete replicated resources in namespaces that match labels
+	namespaceSelectorString, replicateToMatching := objMeta.GetAnnotations()[ReplicateToMatching]
+	if replicateToMatching {
+		namespaceSelector, err := labels.Parse(namespaceSelectorString)
+		if err != nil {
+			err = errors.Wrapf(err, "Failed parse namespace selector: %v", err)
+			logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
+		} else {
+			var namespaces *v1.NamespaceList
+			namespaces, err = r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: namespaceSelector.String()})
+			if err != nil {
+				err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
+				logger.WithError(err).Errorf("Could not get namespaces: %+v", err)
+			} else {
+				r.DeleteResourceInNamespaces(source, namespaces)
+			}
+		}
+	}
 }
 
 func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.NamespaceList, filters []string) {
@@ -444,6 +503,13 @@ func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.Namespa
 				r.DeleteResource(namespace, source)
 			}
 		}
+	}
+}
+
+// DeleteResourceInNamespaces deletes resources in a list of namespaces acquired by evaluating namespace labels
+func (r *GenericReplicator) DeleteResourceInNamespaces(source interface{}, list *v1.NamespaceList) {
+	for _, namespace := range list.Items {
+		r.DeleteResource(namespace, source)
 	}
 }
 
