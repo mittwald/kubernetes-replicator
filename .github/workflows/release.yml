@@ -16,7 +16,7 @@ jobs:
 
       - run: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_USER_TOKEN }}
+          GITHUB_TOKEN: "${{ secrets.RELEASE_USER_TOKEN }}"
 
   bump-version:
     name: Bump app version in Helm chart
@@ -24,13 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: olegtarasov/get-tag@v1
-        id: tagName
-
-      - run: bash ./scripts/bump-app-version.sh publish
+      - name: Bump chart version
+        uses: mittwald/bump-app-version-action@v1
+        with:
+          mode: 'publish'
+          chartYaml: './deploy/helm-chart/kubernetes-replicator/Chart.yaml'
         env:
-          GIT_TAG_NAME: ${{ steps.tagName.outputs.tag }}
-          GITHUB_TOKEN: ${{ secrets.RELEASE_USER_TOKEN }}
-          RELEASE_USER: ${{ secrets.RELEASE_USER }}
-          RELEASE_USER_NAME: ${{ secrets.RELEASE_USER_NAME }}
-          RELEASE_USER_EMAIL: ${{ secrets.RELEASE_USER_EMAIL }}
+          GITHUB_TOKEN: "${{ secrets.RELEASE_USER_TOKEN }}"
+          HELM_REPO_PASSWORD: "${{ secrets.HELM_REPO_PASSWORD }}"

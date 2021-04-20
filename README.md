@@ -22,7 +22,7 @@ secrets and config maps available in multiple namespaces.
 
 ### Using Helm
 
-1. [Add the Mittwald-Charts Repo](https://github.com/mittwald/helm-charts/blob/master/README.md#usage):
+1. Add the Mittwald Helm Repo:
     ```shellsession
     $ helm repo add mittwald https://helm.mittwald.de
     "mittwald" has been added to your repositories
