@@ -15,7 +15,7 @@ serviceAccount:
   annotations: {}
   name:
   privileges:
-    - apiGroups: [ "", "apps", "extensions" ] 
+    - apiGroups: [ "", "apps", "extensions" ]
       resources: ["secrets", "configmaps", "roles", "rolebindings",
       "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
     - apiGroups: [ "batch" ]
@@ -48,3 +48,17 @@ affinity: {}
 podLabels: {}
 
 podAnnotations: {}
+
+livenessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+  successThreshold: 1
