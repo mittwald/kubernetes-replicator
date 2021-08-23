@@ -269,9 +269,12 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	if namespacePatterns, ok := annotations[ReplicateTo]; ok {
 		r.ReplicateToList[sourceKey] = struct{}{}
 
-		if list, err := r.Client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}); err != nil {
-			logger.WithError(err).Error("failed to list namespaces")
-		} else if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, list.Items); err != nil {
+		namespacesFromStore := namespaceWatcher.NamespaceStore.List()
+		namespaces := make([]v1.Namespace, len(namespacesFromStore))
+		for i, ns := range namespacesFromStore {
+			namespaces[i] = *ns.(*v1.Namespace)
+		}
+		if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespaces); err != nil {
 			logger.WithError(err).Errorf("could not replicate object to other namespaces")
 		}
 	} else {
