@@ -75,6 +75,11 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	}
 
 	targetCopy := target.DeepCopy()
+	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
+	if !ok || keepOwnerReferences != "true" {
+		targetCopy.OwnerReferences = nil
+	}
+
 	targetCopy.Subjects = source.Subjects
 
 	log.Infof("updating target %s/%s", target.Namespace, target.Name)
@@ -122,6 +127,11 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		targetCopy = targetObject.DeepCopy()
 	} else {
 		targetCopy = new(rbacv1.RoleBinding)
+	}
+
+	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
+	if ok && keepOwnerReferences == "true" {
+		targetCopy.OwnerReferences = source.OwnerReferences
 	}
 
 	if targetCopy.Annotations == nil {

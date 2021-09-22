@@ -9,6 +9,7 @@ grantClusterAdmin: false
 args: []
   # - -resync-period=30m
   # - -allow-all=false
+  # - -strip-owner-reference=true
 
 serviceAccount:
   create: true

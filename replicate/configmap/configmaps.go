@@ -72,6 +72,11 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 
 	targetCopy := target.DeepCopy()
 
+	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
+	if !ok || keepOwnerReferences != "true" {
+		targetCopy.OwnerReferences = nil
+	}
+
 	if targetCopy.Data == nil {
 		targetCopy.Data = make(map[string]string)
 	}
@@ -152,6 +157,11 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		resourceCopy = targetObject.DeepCopy()
 	} else {
 		resourceCopy = new(v1.ConfigMap)
+	}
+
+	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
+	if ok && keepOwnerReferences == "true" {
+		resourceCopy.OwnerReferences = source.OwnerReferences
 	}
 
 	if resourceCopy.Data == nil {
