@@ -32,7 +32,7 @@ dockers:
     - quay.io/mittwald/kubernetes-replicator:v{{ .Major }}
     - quay.io/mittwald/kubernetes-replicator:v{{ .Major }}.{{ .Minor }}
     - quay.io/mittwald/kubernetes-replicator:{{ .Tag }}
-    binaries:
+    ids:
       - kubernetes-replicator
     goos: linux
     goarch: amd64
@@ -45,7 +45,7 @@ dockers:
     - quay.io/mittwald/kubernetes-replicator-arm64:v{{ .Major }}
     - quay.io/mittwald/kubernetes-replicator-arm64:v{{ .Major }}.{{ .Minor }}
     - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
-    binaries:
+    ids:
       - kubernetes-replicator
     goos: linux
     goarch: arm64
@@ -58,7 +58,7 @@ dockers:
     - quay.io/mittwald/kubernetes-replicator-armv5:v{{ .Major }}
     - quay.io/mittwald/kubernetes-replicator-armv5:v{{ .Major }}.{{ .Minor }}
     - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
-    binaries:
+    ids:
       - kubernetes-replicator
     goos: linux
     goarch: arm
@@ -71,7 +71,7 @@ dockers:
     - quay.io/mittwald/kubernetes-replicator-armv6:v{{ .Major }}
     - quay.io/mittwald/kubernetes-replicator-armv6:v{{ .Major }}.{{ .Minor }}
     - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
-    binaries:
+    ids:
       - kubernetes-replicator
     goos: linux
     goarch: arm
@@ -84,7 +84,7 @@ dockers:
     - quay.io/mittwald/kubernetes-replicator-armv7:v{{ .Major }}
     - quay.io/mittwald/kubernetes-replicator-armv7:v{{ .Major }}.{{ .Minor }}
     - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
-    binaries:
+    ids:
       - kubernetes-replicator
     goos: linux
     goarch: arm
