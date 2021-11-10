@@ -22,10 +22,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_USER_TOKEN }}
 
-      - run: curl -sL https://git.io/goreleaser | bash -s -- --rm-dist
-        env:
-          GITHUB_TOKEN: "${{ secrets.RELEASE_USER_TOKEN }}"
-
   bump-version:
     name: Bump app version in Helm chart
     runs-on: ubuntu-latest
