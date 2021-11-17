@@ -14,7 +14,9 @@ serviceAccount:
   create: true
   annotations: {}
   name:
-  extraPrivileges: []
+  privileges: []
+  # - apiGroups: [""]
+  #   resources: ["configmaps"]
 podSecurityContext: {}
   # fsGroup: 2000
 

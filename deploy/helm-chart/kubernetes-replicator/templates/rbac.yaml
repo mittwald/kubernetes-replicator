@@ -26,7 +26,7 @@ rules:
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
-{{- range .Values.serviceAccount.extraPrivileges }}
+{{- range .Values.serviceAccount.privileges }}
   - apiGroups: {{ .apiGroups | toYaml | nindent 6 }}
     resources: {{ .resources | toYaml | nindent 6 }}
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete", "describe"]
