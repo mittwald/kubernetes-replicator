@@ -77,6 +77,11 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 		targetCopy.OwnerReferences = nil
 	}
 
+	stripLabels, ok := source.Annotations[common.StripLabels]
+	if ok && stripLabels == "true" {
+		targetCopy.Labels = make(map[string]string)
+	}
+
 	if targetCopy.Data == nil {
 		targetCopy.Data = make(map[string]string)
 	}
@@ -164,6 +169,10 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		resourceCopy.OwnerReferences = source.OwnerReferences
 	}
 
+	stripLabels, ok := source.Annotations[common.StripLabels]
+	if ok && stripLabels == "true" {
+		resourceCopy.Labels = make(map[string]string)
+	}
 	if resourceCopy.Data == nil {
 		resourceCopy.Data = make(map[string]string)
 	}

@@ -76,6 +76,11 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 
 	targetCopy := target.DeepCopy()
 
+	stripLabels, ok := source.Annotations[common.StripLabels]
+	if ok && stripLabels == "true" {
+		targetCopy.Labels = make(map[string]string)
+	}
+
 	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
 	if !ok || keepOwnerReferences != "true" {
 		targetCopy.OwnerReferences = nil
@@ -172,9 +177,13 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	sort.Strings(replicatedKeys)
 
 	labelsCopy := make(map[string]string)
-	if source.Labels != nil {
-		for key, value := range source.Labels {
-			labelsCopy[key] = value
+
+	stripLabels, ok := source.Annotations[common.StripLabels]
+	if !ok && stripLabels != "true" {
+		if source.Labels != nil {
+			for key, value := range source.Labels {
+				labelsCopy[key] = value
+			}
 		}
 	}
 
