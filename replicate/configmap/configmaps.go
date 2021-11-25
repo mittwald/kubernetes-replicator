@@ -71,17 +71,6 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	}
 
 	targetCopy := target.DeepCopy()
-
-	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
-	if !ok || keepOwnerReferences != "true" {
-		targetCopy.OwnerReferences = nil
-	}
-
-	stripLabels, ok := source.Annotations[common.StripLabels]
-	if ok && stripLabels == "true" {
-		targetCopy.Labels = make(map[string]string)
-	}
-
 	if targetCopy.Data == nil {
 		targetCopy.Data = make(map[string]string)
 	}
