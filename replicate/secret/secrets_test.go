@@ -746,29 +746,6 @@ func TestSecretReplicator(t *testing.T) {
 		require.False(t, reflect.DeepEqual(sourceLabels, updTarget.Labels))
 
 		require.Equal(t, map[string]string(nil), updTarget.Labels)
-
-		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
-			UpdateFunc: func(wg *sync.WaitGroup, oldObj interface{}, newObj interface{}) {
-				secret := oldObj.(*corev1.Secret)
-				if secret.Namespace == prefix+"test2" && secret.Name == source.Name {
-					log.Debugf("UpdateFunc %+v -> %+v", oldObj, newObj)
-					wg.Done()
-				}
-			},
-		})
-
-		_, err = secrets.Patch(context.TODO(), source.Name, types.JSONPatchType, []byte(`[{"op": "remove", "path": "/data/foo"}]`), metav1.PatchOptions{})
-		require.NoError(t, err)
-
-		waitWithTimeout(wg, MaxWaitTime)
-		close(stop)
-
-		updTarget, err = secrets2.Get(context.TODO(), source.Name, metav1.GetOptions{})
-		require.NoError(t, err)
-
-		_, hasFoo := updTarget.Data["foo"]
-		require.False(t, hasFoo)
-		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
 	})
 
 	t.Run("replication is pushed to other namespaces by label selector", func(t *testing.T) {
