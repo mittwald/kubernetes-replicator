@@ -26,12 +26,13 @@ type Replicator struct {
 const sleepTime = 100 * time.Millisecond
 
 // NewReplicator creates a new secret replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, disablePush bool) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "RoleBinding",
 			ObjType:      &rbacv1.RoleBinding{},
 			AllowAll:     allowAll,
+			DisablePush:  disablePush,
 			ResyncPeriod: resyncPeriod,
 			Client:       client,
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {

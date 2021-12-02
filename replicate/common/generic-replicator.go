@@ -26,6 +26,7 @@ type ReplicatorConfig struct {
 	Client       kubernetes.Interface
 	ResyncPeriod time.Duration
 	AllowAll     bool
+	DisablePush  bool
 	ListFunc     cache.ListFunc
 	WatchFunc    cache.WatchFunc
 	ObjType      runtime.Object
@@ -267,15 +268,19 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 
 	// Match resources with "replicate-to" annotation
 	if namespacePatterns, ok := annotations[ReplicateTo]; ok {
-		r.ReplicateToList[sourceKey] = struct{}{}
+		if !r.DisablePush {
+			r.ReplicateToList[sourceKey] = struct{}{}
 
-		namespacesFromStore := namespaceWatcher.NamespaceStore.List()
-		namespaces := make([]v1.Namespace, len(namespacesFromStore))
-		for i, ns := range namespacesFromStore {
-			namespaces[i] = *ns.(*v1.Namespace)
-		}
-		if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespaces); err != nil {
-			logger.WithError(err).Errorf("could not replicate object to other namespaces")
+			namespacesFromStore := namespaceWatcher.NamespaceStore.List()
+			namespaces := make([]v1.Namespace, len(namespacesFromStore))
+			for i, ns := range namespacesFromStore {
+				namespaces[i] = *ns.(*v1.Namespace)
+			}
+			if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespaces); err != nil {
+				logger.WithError(err).Errorf("could not replicate object to other namespaces")
+			}
+		} else {
+			logger.Info("skip object: push-based replication is disabled")
 		}
 	} else {
 		delete(r.ReplicateToList, sourceKey)
@@ -283,18 +288,22 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 
 	// Match resources with "replicate-to-matching" annotations
 	if namespaceSelectorString, ok := annotations[ReplicateToMatching]; ok {
-		namespaceSelector, err := labels.Parse(namespaceSelectorString)
-		if err != nil {
-			delete(r.ReplicateToMatchingList, sourceKey)
-			logger.WithError(err).Error("failed to parse label selector")
+		if !r.DisablePush {
+			namespaceSelector, err := labels.Parse(namespaceSelectorString)
+			if err != nil {
+				delete(r.ReplicateToMatchingList, sourceKey)
+				logger.WithError(err).Error("failed to parse label selector")
 
-			return
-		}
+				return
+			}
 
-		r.ReplicateToMatchingList[sourceKey] = namespaceSelector
+			r.ReplicateToMatchingList[sourceKey] = namespaceSelector
 
-		if err := r.replicateResourceToMatchingNamespacesByLabel(ctx, obj, namespaceSelector); err != nil {
-			logger.WithError(err).Error("error while replicating by label selector")
+			if err := r.replicateResourceToMatchingNamespacesByLabel(ctx, obj, namespaceSelector); err != nil {
+				logger.WithError(err).Error("error while replicating by label selector")
+			}
+		} else {
+			logger.Info("skip object: push-based replication is disabled")
 		}
 	} else {
 		delete(r.ReplicateToMatchingList, sourceKey)

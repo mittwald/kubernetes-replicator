@@ -24,12 +24,13 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new role replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, disablePush bool) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "Role",
 			ObjType:      &rbacv1.Role{},
 			AllowAll:     allowAll,
+			DisablePush:  disablePush,
 			ResyncPeriod: resyncPeriod,
 			Client:       client,
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {

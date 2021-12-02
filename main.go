@@ -30,6 +30,7 @@ func init() {
 	flag.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace, debug, info, warn, error)")
 	flag.StringVar(&f.LogFormat, "log-format", "plain", "Log format (plain, json)")
 	flag.BoolVar(&f.AllowAll, "allow-all", false, "allow replication of all secrets (CAUTION: only use when you know what you're doing)")
+	flag.BoolVar(&f.DisablePush, "disable-push", false, "disable Push-based replication")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -80,10 +81,10 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
-	secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+	secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.DisablePush)
+	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.DisablePush)
+	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.DisablePush)
+	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.DisablePush)
 
 	go secretRepl.Run()
 

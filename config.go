@@ -8,6 +8,7 @@ type flags struct {
 	ResyncPeriod  time.Duration
 	StatusAddr    string
 	AllowAll      bool
+	DisablePush   bool
 	LogLevel      string
 	LogFormat     string
 }

@@ -79,7 +79,7 @@ func TestRoleReplicator(t *testing.T) {
 	prefix := namespacePrefix()
 	client := kubernetes.NewForConfigOrDie(config)
 
-	repl := NewReplicator(client, 60*time.Second, false)
+	repl := NewReplicator(client, 60*time.Second, false, false)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
