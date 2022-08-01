@@ -6,6 +6,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 grantClusterAdmin: false
+automountServiceAccountToken: true
 args: []
   # - -resync-period=30m
   # - -allow-all=false
@@ -15,6 +16,7 @@ serviceAccount:
   annotations: {}
   name:
   privileges: []
+  automountServiceAccountToken: true
   # - apiGroups: [""]
   #   resources: ["configmaps"]
 podSecurityContext: {}
