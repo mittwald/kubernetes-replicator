@@ -11,6 +11,13 @@ args: []
   # - -resync-period=30m
   # - -allow-all=false
 
+## Deployment strategy / DaemonSet updateStrategy
+##
+updateStrategy: {}
+#   type: RollingUpdate
+#   rollingUpdate:
+#     maxUnavailable: 1
+
 serviceAccount:
   create: true
   annotations: {}
