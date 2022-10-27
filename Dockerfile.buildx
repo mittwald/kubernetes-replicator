@@ -12,6 +12,6 @@ FROM --platform=$TARGETPLATFORM scratch
 ARG TARGETPLATFORM
 LABEL MAINTAINER="Martin Helmich <m.helmich@mittwald.de>"
 
-COPY --from=build /src/ /kubernetes-replicator
+COPY --from=deps /src/ /kubernetes-replicator
 
 CMD ["/kubernetes-replicator"]
