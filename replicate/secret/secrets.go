@@ -53,9 +53,6 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 
 // ReplicateDataFrom takes a source object and copies over data to target object
 func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interface{}) error {
-	// todo:
-	// read annotation from the source and execute logic ignore annotations to target
-	// Ex: replicator.v1.mittwald.de/ignore-annotations: "xxx,yyy,zzz"
 	source := sourceObj.(*v1.Secret)
 	target := targetObj.(*v1.Secret)
 
@@ -78,16 +75,6 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	}
 
 	targetCopy := target.DeepCopy()
-
-	// check if annotation ignore is set than delete all annotation of targetCopy
-	var ignoreAnnotations []string
-	if val, ok := targetCopy.Annotations[common.IgnoreAnnotations]; ok {
-		ignoreAnnotations = strings.Split(val, ",")
-		for i := 0; i < len(ignoreAnnotations); i++ {
-			key := ignoreAnnotations[i]
-			delete(targetCopy.Annotations, key)
-		}
-	}
 
 	if targetCopy.Data == nil {
 		targetCopy.Data = make(map[string][]byte)
