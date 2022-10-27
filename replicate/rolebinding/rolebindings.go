@@ -124,15 +124,25 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		targetCopy = new(rbacv1.RoleBinding)
 	}
 
+	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
+	if ok && keepOwnerReferences == "true" {
+		targetCopy.OwnerReferences = source.OwnerReferences
+	}
+
 	if targetCopy.Annotations == nil {
 		targetCopy.Annotations = make(map[string]string)
 	}
 
 	labelsCopy := make(map[string]string)
-	if source.Labels != nil {
-		for key, value := range source.Labels {
-			labelsCopy[key] = value
+
+	stripLabels, ok := source.Annotations[common.StripLabels]
+	if !ok && stripLabels != "true" {
+		if source.Labels != nil {
+			for key, value := range source.Labels {
+				labelsCopy[key] = value
+			}
 		}
+
 	}
 
 	targetCopy.Name = source.Name

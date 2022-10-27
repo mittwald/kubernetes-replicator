@@ -10,4 +10,6 @@ const (
 	ReplicationAllowedNamespaces    = "replicator.v1.mittwald.de/replication-allowed-namespaces"
 	ReplicateTo                     = "replicator.v1.mittwald.de/replicate-to"
 	ReplicateToMatching             = "replicator.v1.mittwald.de/replicate-to-matching"
+	KeepOwnerReferences             = "replicator.v1.mittwald.de/keep-owner-references"
+	StripLabels                     = "replicator.v1.mittwald.de/strip-labels"
 )

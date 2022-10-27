@@ -6,6 +6,10 @@ metadata:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  {{- with .Values.updateStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "kubernetes-replicator.selectorLabels" . | nindent 6 }}
@@ -26,6 +30,7 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ include "kubernetes-replicator.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
