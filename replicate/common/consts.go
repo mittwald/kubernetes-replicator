@@ -10,4 +10,5 @@ const (
 	ReplicationAllowedNamespaces    = "replicator.v1.mittwald.de/replication-allowed-namespaces"
 	ReplicateTo                     = "replicator.v1.mittwald.de/replicate-to"
 	ReplicateToMatching             = "replicator.v1.mittwald.de/replicate-to-matching"
+	IgnoreAnnotations               = "replicator.v1.mittwald.de/ignore-annotations"
 )
