@@ -8,6 +8,7 @@ import (
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	"github.com/mittwald/kubernetes-replicator/replicate/configmap"
+	"github.com/mittwald/kubernetes-replicator/replicate/networkpolicy"
 	"github.com/mittwald/kubernetes-replicator/replicate/role"
 	"github.com/mittwald/kubernetes-replicator/replicate/rolebinding"
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
@@ -84,6 +85,7 @@ func main() {
 	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+	networkPolicyRepl := networkpolicy.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 
 	go secretRepl.Run()
 
@@ -92,6 +94,8 @@ func main() {
 	go roleRepl.Run()
 
 	go roleBindingRepl.Run()
+
+	go networkPolicyRepl.Run()
 
 	h := liveness.Handler{
 		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl},
