@@ -100,6 +100,7 @@ func main() {
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)
 
 	http.Handle("/healthz", &h)
+	http.Handle("/readyz", &h)
 	err = http.ListenAndServe(f.StatusAddr, nil)
 	if err != nil {
 		log.Fatal(err)
