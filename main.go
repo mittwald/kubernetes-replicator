@@ -11,6 +11,7 @@ import (
 	"github.com/mittwald/kubernetes-replicator/replicate/role"
 	"github.com/mittwald/kubernetes-replicator/replicate/rolebinding"
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
+	"github.com/mittwald/kubernetes-replicator/replicate/serviceaccount"
 
 	log "github.com/sirupsen/logrus"
 
@@ -84,6 +85,7 @@ func main() {
 	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+	serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 
 	go secretRepl.Run()
 
@@ -93,8 +95,10 @@ func main() {
 
 	go roleBindingRepl.Run()
 
+	go serviceAccountRepl.Run()
+
 	h := liveness.Handler{
-		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl},
+		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl, serviceAccountRepl},
 	}
 
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)

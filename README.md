@@ -1,4 +1,4 @@
-# ConfigMap, Secret and Role, and RoleBinding replication for Kubernetes
+# ConfigMap, Secret and Role, RoleBinding and ServiceAccount replication for Kubernetes
 
 ![Build Status](https://github.com/mittwald/kubernetes-replicator/workflows/Compile%20&%20Test/badge.svg)
 
@@ -51,10 +51,10 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 
 To create a new role, your own account needs to have at least the same set of privileges as the role you're trying to create. The chart currently offers two options to grant these permissions to the service account used by the replicator:
 
-- Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached. 
+- Set the value `grantClusterAdmin`to `true`, which grants the service account admin privileges. This is set to `false` by default, as having a service account with that level of access might be undesirable due to the potential security risks attached.
 
-- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a list that contains pairs of api group and resource lists. 
-  
+- Set the lists of needed api groups and resources explicitely. These can be specified using the value `privileges`. `privileges` is a list that contains pairs of api group and resource lists.
+
   Example:
 
   ```yaml
@@ -63,14 +63,14 @@ To create a new role, your own account needs to have at least the same set of pr
     annotations: {}
     name:
     privileges:
-      - apiGroups: [ "", "apps", "extensions" ] 
+      - apiGroups: [ "", "apps", "extensions" ]
         resources: ["secrets", "configmaps", "roles", "rolebindings",
         "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
       - apiGroups: [ "batch" ]
         resources:  ["configmaps", "cronjobs", "deployments", "events", "ingresses", "jobs", "pods", "pods/attach", "pods/exec", "pods/log", "pods/portforward", "services"]
   ```
 
-  These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified. 
+  These settings permit the replication of Roles and RoleBindings with privileges for the api groups `""`. `apps`, `batch` and `extensions` on the resources specified.
 
 ### "Push-based" replication
 
@@ -113,19 +113,19 @@ It is possible to use both methods of push-based replication together in a singl
 
 ### "Pull-based" replication
 
-Pull-based replication makes it possible to create a secret/configmap/role/rolebindings and select a "source" resource 
+Pull-based replication makes it possible to create a secret/configmap/role/rolebindings and select a "source" resource
 from which the data is replicated from.
 
 #### Step 1: Create the source secret
 
-If a secret or configMap needs to be replicated to other namespaces, annotations should be added in that object 
+If a secret or configMap needs to be replicated to other namespaces, annotations should be added in that object
 permitting replication.
- 
-  - Add `replicator.v1.mittwald.de/replication-allowed` annotation with value `true` indicating that the object can be 
+
+  - Add `replicator.v1.mittwald.de/replication-allowed` annotation with value `true` indicating that the object can be
     replicated.
-  - Add `replicator.v1.mittwald.de/replication-allowed-namespaces` annotation. Value of this annotation should contain 
-    a comma separated list of permitted namespaces or regular expressions. For example `namespace-1,my-ns-2,app-ns-[0-9]*`: 
-    in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` as well as any 
+  - Add `replicator.v1.mittwald.de/replication-allowed-namespaces` annotation. Value of this annotation should contain
+    a comma separated list of permitted namespaces or regular expressions. For example `namespace-1,my-ns-2,app-ns-[0-9]*`:
+    in this case replication will be performed only into the namespaces `namespace-1` and `my-ns-2` as well as any
     namespace that matches the regular expression `app-ns-[0-9]*`.
 
     ```yaml
@@ -141,7 +141,7 @@ permitting replication.
 
 #### Step 2: Create an empty destination secret
 
-Add the annotation `replicator.v1.mittwald.de/replicate-from` to any Kubernetes secret or config map object. The value 
+Add the annotation `replicator.v1.mittwald.de/replicate-from` to any Kubernetes secret or config map object. The value
 of that annotation should contain the the name of another secret or config map (using `<namespace>/<name>` notation).
 
 ```yaml
@@ -154,13 +154,13 @@ metadata:
 data: {}
 ```
 
-The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in 
-sync.   
+The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in
+sync.
 
 #### Special case: TLS secrets
 
-Secrets of type `kubernetes.io/tls` are treated in a special way and need to have a `data["tls.crt"]` and a 
-`data["tls.key"]` property to begin with. In the replicated secrets, these properties need to be present to begin with, 
+Secrets of type `kubernetes.io/tls` are treated in a special way and need to have a `data["tls.crt"]` and a
+`data["tls.key"]` property to begin with. In the replicated secrets, these properties need to be present to begin with,
 but they may be empty:
 
 ```yaml
@@ -178,8 +178,8 @@ data:
 
 #### Special case: Docker registry credentials
 
-Secrets of type `kubernetes.io/dockerconfigjson` also require special treatment. These secrets require to have a 
-`.dockerconfigjson` key that needs to require valid JSON. For this reason, a replicated secret of this type should be 
+Secrets of type `kubernetes.io/dockerconfigjson` also require special treatment. These secrets require to have a
+`.dockerconfigjson` key that needs to require valid JSON. For this reason, a replicated secret of this type should be
 created as follows:
 
 ```yaml
@@ -215,7 +215,7 @@ data:
 
 #### Special case: Resource with .metadata.ownerReferences
 
-Sometimes, secrets are generated by external components. Such secrets are configured with an ownerReference. By default, the kubernetes-replicator will delete the 
+Sometimes, secrets are generated by external components. Such secrets are configured with an ownerReference. By default, the kubernetes-replicator will delete the
 ownerReference in the target namespace.
 
 ownerReference won't work [across different namespaces](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/#owners-and-dependents) and the secret at the destination will be removed by the kubernetes garbage collection.
