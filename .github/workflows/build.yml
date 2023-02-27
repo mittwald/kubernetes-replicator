@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        helm: [ '3.1.2' ]
+        helm: [ '3.10.3' ]
     steps:
       - uses: actions/checkout@v2
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Set up KIND
         run: |
-          wget -O ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.8.1/kind-linux-amd64
+          wget -O ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.17.0/kind-linux-amd64
           chmod +x ./kind
 
       - name: Start cluster
