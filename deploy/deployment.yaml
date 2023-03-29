@@ -36,6 +36,6 @@ spec:
             port: health
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /readyz
             port: health
         resources: {}

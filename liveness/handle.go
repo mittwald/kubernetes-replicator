@@ -33,16 +33,19 @@ func (h *Handler) notReadyComponents() []string {
 
 //noinspection GoUnusedParameter
 func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	r := response{
-		NotReady: h.notReadyComponents(),
-	}
-
-	if len(r.NotReady) > 0 {
-		res.WriteHeader(http.StatusServiceUnavailable)
-	} else {
+	if req.URL.Path == "/healthz" {
 		res.WriteHeader(http.StatusOK)
-	}
+	} else {
+		r := response{
+			NotReady: h.notReadyComponents(),
+		}
 
-	enc := json.NewEncoder(res)
-	_ = enc.Encode(&r)
+		if len(r.NotReady) > 0 {
+			res.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			res.WriteHeader(http.StatusOK)
+		}
+		enc := json.NewEncoder(res)
+		_ = enc.Encode(&r)
+	}
 }
