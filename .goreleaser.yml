@@ -27,11 +27,11 @@ dockers:
   -
     dockerfile: Dockerfile
     image_templates:
-    - quay.io/mittwald/kubernetes-replicator:latest
-    - quay.io/mittwald/kubernetes-replicator:stable
-    - quay.io/mittwald/kubernetes-replicator:v{{ .Major }}
-    - quay.io/mittwald/kubernetes-replicator:v{{ .Major }}.{{ .Minor }}
-    - quay.io/mittwald/kubernetes-replicator:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-amd64:latest
+    - quay.io/mittwald/kubernetes-replicator-amd64:stable
+    - quay.io/mittwald/kubernetes-replicator-amd64:v{{ .Major }}
+    - quay.io/mittwald/kubernetes-replicator-amd64:v{{ .Major }}.{{ .Minor }}
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
     ids:
       - kubernetes-replicator
     goos: linux
@@ -89,3 +89,44 @@ dockers:
     goos: linux
     goarch: arm
     goarm: '7'
+docker_manifests:
+  - 
+    name_template: quay.io/mittwald/kubernetes-replicator:latest
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
+  - 
+    name_template: quay.io/mittwald/kubernetes-replicator:stable
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
+  - 
+    name_template: quay.io/mittwald/kubernetes-replicator:v{{ .Major }}
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
+  - 
+    name_template: quay.io/mittwald/kubernetes-replicator:v{{ .Major }}.{{ .Minor }}
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
+  - 
+    name_template: quay.io/mittwald/kubernetes-replicator:{{ .Tag }}
+    image_templates:
+    - quay.io/mittwald/kubernetes-replicator-amd64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-arm64:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv5:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv6:{{ .Tag }}
+    - quay.io/mittwald/kubernetes-replicator-armv7:{{ .Tag }}
