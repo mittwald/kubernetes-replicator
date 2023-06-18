@@ -37,6 +37,9 @@ dockers:
     goos: linux
     goarch: amd64
     goarm: ''
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/amd64
   -
     dockerfile: Dockerfile
     image_templates:
@@ -50,6 +53,9 @@ dockers:
     goos: linux
     goarch: arm64
     goarm: ''
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm64
   -
     dockerfile: Dockerfile
     image_templates:
@@ -63,6 +69,9 @@ dockers:
     goos: linux
     goarch: arm
     goarm: '5'
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm/v5
   -
     dockerfile: Dockerfile
     image_templates:
@@ -76,6 +85,9 @@ dockers:
     goos: linux
     goarch: arm
     goarm: '6'
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm/v6
   -
     dockerfile: Dockerfile
     image_templates:
@@ -89,6 +101,9 @@ dockers:
     goos: linux
     goarch: arm
     goarm: '7'
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm/v7
 docker_manifests:
   - 
     name_template: quay.io/mittwald/kubernetes-replicator:latest
