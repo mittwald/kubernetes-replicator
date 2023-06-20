@@ -22,7 +22,7 @@ rules:
     resources: [ "namespaces" ]
     verbs: [ "get", "watch", "list" ]
   - apiGroups: [""]
-    resources: ["secrets", "configmaps"]
+    resources: ["secrets", "configmaps", "serviceaccounts"]
     verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
