@@ -3,12 +3,14 @@ package common
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"istio.io/client-go/pkg/clientset/versioned"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -24,6 +26,7 @@ import (
 type ReplicatorConfig struct {
 	Kind         string
 	Client       kubernetes.Interface
+	IstioClient  versioned.Interface
 	ResyncPeriod time.Duration
 	AllowAll     bool
 	ListFunc     cache.ListFunc

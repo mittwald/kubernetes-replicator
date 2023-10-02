@@ -8,10 +8,12 @@ import (
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	"github.com/mittwald/kubernetes-replicator/replicate/configmap"
+	"github.com/mittwald/kubernetes-replicator/replicate/envoyfilter"
 	"github.com/mittwald/kubernetes-replicator/replicate/role"
 	"github.com/mittwald/kubernetes-replicator/replicate/rolebinding"
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
 	"github.com/mittwald/kubernetes-replicator/replicate/serviceaccount"
+	"istio.io/client-go/pkg/clientset/versioned"
 
 	log "github.com/sirupsen/logrus"
 
@@ -80,12 +82,14 @@ func main() {
 	}
 
 	client = kubernetes.NewForConfigOrDie(config)
+	istioClient := versioned.NewForConfigOrDie(config)
 
 	secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 	serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+	envoyFilterRepl := envoyfilter.NewReplicator(client, f.ResyncPeriod, f.AllowAll, istioClient)
 
 	go secretRepl.Run()
 
@@ -97,8 +101,10 @@ func main() {
 
 	go serviceAccountRepl.Run()
 
+	go envoyFilterRepl.Run()
+
 	h := liveness.Handler{
-		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl, serviceAccountRepl},
+		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl, serviceAccountRepl, envoyFilterRepl},
 	}
 
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)
