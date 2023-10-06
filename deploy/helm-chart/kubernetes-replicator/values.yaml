@@ -22,10 +22,10 @@ serviceAccount:
   create: true
   annotations: {}
   name:
-  privileges: []
+  privileges:
+  - apiGroups: ["networking.istio.io"]
+    resources: ["envoyfilters"]
   automountServiceAccountToken: true
-  # - apiGroups: [""]
-  #   resources: ["configmaps"]
 podSecurityContext: {}
   # fsGroup: 2000
 
