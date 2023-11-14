@@ -2,14 +2,19 @@ package common
 
 // Annotations that are used to control this Controller's behaviour
 const (
-	ReplicateFromAnnotation         = "replicator.v1.mittwald.de/replicate-from"
-	ReplicatedAtAnnotation          = "replicator.v1.mittwald.de/replicated-at"
-	ReplicatedFromVersionAnnotation = "replicator.v1.mittwald.de/replicated-from-version"
-	ReplicatedKeysAnnotation        = "replicator.v1.mittwald.de/replicated-keys"
-	ReplicationAllowed              = "replicator.v1.mittwald.de/replication-allowed"
-	ReplicationAllowedNamespaces    = "replicator.v1.mittwald.de/replication-allowed-namespaces"
-	ReplicateTo                     = "replicator.v1.mittwald.de/replicate-to"
-	ReplicateToMatching             = "replicator.v1.mittwald.de/replicate-to-matching"
-	KeepOwnerReferences             = "replicator.v1.mittwald.de/keep-owner-references"
-	StripLabels                     = "replicator.v1.mittwald.de/strip-labels"
+	Prefix = "replicator.v1.mittwald.de"
+)
+
+var (
+	ReplicateFromAnnotation         = Prefix + "/replicate-from"
+	ReplicatedAtAnnotation          = Prefix + "/replicated-at"
+	ReplicatedFromVersionAnnotation = Prefix + "/replicated-from-version"
+	ReplicatedKeysAnnotation        = Prefix + "/replicated-keys"
+	ReplicationAllowed              = Prefix + "/replication-allowed"
+	ReplicationAllowedNamespaces    = Prefix + "/replication-allowed-namespaces"
+	ReplicateTo                     = Prefix + "/replicate-to"
+	ReplicateToMatching             = Prefix + "/replicate-to-matching"
+	KeepOwnerReferences             = Prefix + "/keep-owner-references"
+	StripLabels                     = Prefix + "/strip-labels"
+	StripAnnotations                = Prefix + "/strip-annotations"
 )

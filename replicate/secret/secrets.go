@@ -102,6 +102,8 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 
 	logger.Infof("updating target %s", common.MustGetKey(target))
 
+	common.CopyAnnotations(source, targetCopy)
+
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	targetCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
@@ -179,6 +181,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	resourceCopy.Name = source.Name
 	resourceCopy.Labels = labelsCopy
 	resourceCopy.Type = targetResourceType
+	common.CopyAnnotations(source, resourceCopy)
 	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
