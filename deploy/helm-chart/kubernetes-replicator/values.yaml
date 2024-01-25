@@ -18,6 +18,9 @@ updateStrategy: {}
 #   rollingUpdate:
 #     maxUnavailable: 1
 
+# Additional manifests to deploy within the chart. A list of objects.
+extraObjects: []
+
 serviceAccount:
   create: true
   annotations: {}
