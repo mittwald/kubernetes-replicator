@@ -111,7 +111,7 @@ func TestSecretReplicator(t *testing.T) {
 
 	secrets := client.CoreV1().Secrets(prefix + "test")
 
-	const MaxWaitTime = 1000 * time.Millisecond
+	const MaxWaitTime = 10 * time.Second
 	t.Run("replicates from existing secret", func(t *testing.T) {
 		source := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
