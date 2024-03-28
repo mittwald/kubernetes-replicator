@@ -31,6 +31,11 @@ func init() {
 	flag.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace, debug, info, warn, error)")
 	flag.StringVar(&f.LogFormat, "log-format", "plain", "Log format (plain, json)")
 	flag.BoolVar(&f.AllowAll, "allow-all", false, "allow replication of all secrets (CAUTION: only use when you know what you're doing)")
+	flag.BoolVar(&f.ReplicateSecrets, "replicate-secrets", true, "Enable replication of secrets")
+	flag.BoolVar(&f.ReplicateConfigMaps, "replicate-configmaps", true, "Enable replication of config maps")
+	flag.BoolVar(&f.ReplicateRoles, "replicate-roles", true, "Enable replication of roles")
+	flag.BoolVar(&f.ReplicateRoleBindings, "replicate-role-bindings", true, "Enable replication of role bindings")
+	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
