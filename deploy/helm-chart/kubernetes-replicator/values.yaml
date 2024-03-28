@@ -10,6 +10,11 @@ automountServiceAccountToken: true
 args: []
   # - -resync-period=30m
   # - -allow-all=false
+  # - -replicate-secrets=true
+  # - -replicate-configmaps=true
+  # - -replicate-roles=true
+  # - -replicate-role-bindings=true
+  # - -replicate-service-accounts=true
 
 ## Deployment strategy / DaemonSet updateStrategy
 ##
