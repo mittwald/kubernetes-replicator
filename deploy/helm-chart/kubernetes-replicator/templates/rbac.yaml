@@ -18,19 +18,69 @@ metadata:
   labels:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
 rules:
-  - apiGroups: [ "" ]
-    resources: [ "namespaces" ]
-    verbs: [ "get", "watch", "list" ]
-  - apiGroups: [""]
-    resources: ["secrets", "configmaps", "serviceaccounts"]
-    verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles", "rolebindings"]
-    verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
+  - apiGroups:
+    - ""
+    resources:
+    - namespaces
+    verbs:
+    - get
+    - watch
+    - list
+{{ with .Values.replicationEnabled }}
+{{- if or .secrets .configMaps .serviceAccounts }}
+  - apiGroups:
+    - ""
+    resources:
+{{- if .secrets }}
+    - secrets
+{{- end }}
+{{- if .configMaps }}
+    - configmaps
+{{- end }}
+{{- if .serviceAccounts }}
+    - serviceaccounts
+{{- end }}
+    verbs:
+    - get
+    - watch
+    - list
+    - create
+    - update
+    - patch
+    - delete
+{{- end }}
+{{- if or .roles .roleBindings }}
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+{{- if .roles }}
+    - roles
+{{- end }}
+{{- if .roleBindings }}
+    - rolebindings
+{{- end }}
+    verbs:
+    - get
+    - watch
+    - list
+    - create
+    - update
+    - patch
+    - delete
+{{- end }}
+{{- end }}
 {{- range .Values.serviceAccount.privileges }}
   - apiGroups: {{ .apiGroups | toYaml | nindent 6 }}
     resources: {{ .resources | toYaml | nindent 6 }}
-    verbs: ["get", "watch", "list", "create", "update", "patch", "delete", "describe"]
+    verbs:
+    - get
+    - watch
+    - list
+    - create
+    - update
+    - patch
+    - delete
+    - describe
 {{- end }}
 ---
 kind: ClusterRoleBinding

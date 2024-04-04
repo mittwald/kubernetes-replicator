@@ -7,14 +7,15 @@ nameOverride: ""
 fullnameOverride: ""
 grantClusterAdmin: false
 automountServiceAccountToken: true
-args: []
-  # - -resync-period=30m
-  # - -allow-all=false
-  # - -replicate-secrets=true
-  # - -replicate-configmaps=true
-  # - -replicate-roles=true
-  # - -replicate-role-bindings=true
-  # - -replicate-service-accounts=true
+# args:
+# - -resync-period=30m
+# - -allow-all=false
+replicationEnabled:
+  secrets: true
+  configMaps: true
+  roles: true
+  roleBindings: true
+  serviceAccounts: true
 
 ## Deployment strategy / DaemonSet updateStrategy
 ##

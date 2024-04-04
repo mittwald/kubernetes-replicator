@@ -43,7 +43,14 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            {{- toYaml .Values.args | nindent 12 }}
+            - -replicate-secrets={{ .Values.replicationEnabled.secrets }}
+            - -replicate-configmaps={{ .Values.replicationEnabled.configMaps }}
+            - -replicate-roles={{ .Values.replicationEnabled.roles }}
+            - -replicate-role-bindings={{ .Values.replicationEnabled.roleBindings }}
+            - -replicate-service-accounts={{ .Values.replicationEnabled.serviceAccounts }}
+            {{- with .Values.args }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: health
               containerPort: 9102
