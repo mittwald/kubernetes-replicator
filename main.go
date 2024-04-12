@@ -31,6 +31,11 @@ func init() {
 	flag.StringVar(&f.LogLevel, "log-level", "info", "Log level (trace, debug, info, warn, error)")
 	flag.StringVar(&f.LogFormat, "log-format", "plain", "Log format (plain, json)")
 	flag.BoolVar(&f.AllowAll, "allow-all", false, "allow replication of all secrets (CAUTION: only use when you know what you're doing)")
+	flag.BoolVar(&f.ReplicateSecrets, "replicate-secrets", true, "Enable replication of secrets")
+	flag.BoolVar(&f.ReplicateConfigMaps, "replicate-configmaps", true, "Enable replication of config maps")
+	flag.BoolVar(&f.ReplicateRoles, "replicate-roles", true, "Enable replication of roles")
+	flag.BoolVar(&f.ReplicateRoleBindings, "replicate-role-bindings", true, "Enable replication of role bindings")
+	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -66,6 +71,7 @@ func main() {
 	var config *rest.Config
 	var err error
 	var client kubernetes.Interface
+	var enabledReplicators []common.Replicator
 
 	if f.Kubeconfig == "" {
 		log.Info("using in-cluster configuration")
@@ -81,24 +87,38 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
-	secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
-	serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+	if f.ReplicateSecrets {
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go secretRepl.Run()
+		enabledReplicators = append(enabledReplicators, secretRepl)
+	}
 
-	go secretRepl.Run()
+	if f.ReplicateConfigMaps {
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go configMapRepl.Run()
+		enabledReplicators = append(enabledReplicators, configMapRepl)
+	}
 
-	go configMapRepl.Run()
+	if f.ReplicateRoles {
+		roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go roleRepl.Run()
+		enabledReplicators = append(enabledReplicators, roleRepl)
+	}
 
-	go roleRepl.Run()
+	if f.ReplicateRoleBindings {
+		roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go roleBindingRepl.Run()
+		enabledReplicators = append(enabledReplicators, roleBindingRepl)
+	}
 
-	go roleBindingRepl.Run()
-
-	go serviceAccountRepl.Run()
+	if f.ReplicateServiceAccounts {
+		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go serviceAccountRepl.Run()
+		enabledReplicators = append(enabledReplicators, serviceAccountRepl)
+	}
 
 	h := liveness.Handler{
-		Replicators: []common.Replicator{secretRepl, configMapRepl, roleRepl, roleBindingRepl, serviceAccountRepl},
+		Replicators: enabledReplicators,
 	}
 
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)
