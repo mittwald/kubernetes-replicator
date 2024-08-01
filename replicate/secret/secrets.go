@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,6 +21,10 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 )
+
+// Regex to split at , but not at \,
+// This is used to split keys while keeping , as key character allowed
+var commaSplit = regexp.MustCompile(`[^\\],`)
 
 type Replicator struct {
 	*common.GenericReplicator
@@ -82,13 +88,22 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	prevKeys, hasPrevKeys := common.PreviouslyPresentKeys(&targetCopy.ObjectMeta)
 	replicatedKeys := make([]string, 0)
 
-	for key, value := range source.Data {
-		newValue := make([]byte, len(value))
-		copy(newValue, value)
-		targetCopy.Data[key] = newValue
+	annotationReplicateKeys, ok := source.ObjectMeta.Annotations[common.ReplicateKeys]
+	if !ok {
+		annotationReplicateKeys = ""
+	}
+	replicateKeysList := commaSplit.Split(annotationReplicateKeys, -1)
 
-		replicatedKeys = append(replicatedKeys, key)
-		delete(prevKeys, key)
+	for key, value := range source.Data {
+		// Replicate a key only if list is empty (all keys), or the key is present in the list
+		if annotationReplicateKeys == "" || slices.Contains(replicateKeysList, key) {
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			targetCopy.Data[key] = newValue
+
+			replicatedKeys = append(replicatedKeys, key)
+			delete(prevKeys, key)
+		}
 	}
 
 	if hasPrevKeys {
