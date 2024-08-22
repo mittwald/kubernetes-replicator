@@ -1,0 +1,35 @@
+## this is the target but already exists
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: source-service
+#  namespace: some-namespace
+#spec:
+#  ports:
+#    - name: http
+#      port: 80
+#      targetPort: http
+#      protocol: TCP
+#  selector:
+#    app: foo
+#    application: foo
+#---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-service
+  namespace: default
+  annotations:
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-path: /version
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    replicator.v1.mittwald.de/replicate-to: some-namespace
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: foo
+    application: foo

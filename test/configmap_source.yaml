@@ -4,3 +4,12 @@ metadata:
   name: config-source
 data:
   foo: bar
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-source-replicate-to
+  annotations:
+    replicator.v1.mittwald.de/replicate-to: some-namespace
+data:
+  bar: foo

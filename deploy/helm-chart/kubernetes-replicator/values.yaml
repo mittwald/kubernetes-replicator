@@ -1,7 +1,7 @@
 image:
   repository: quay.io/mittwald/kubernetes-replicator
   #tag: stable # if no tag is given, the chart's appVersion is used
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -16,6 +16,7 @@ replicationEnabled:
   roles: true
   roleBindings: true
   serviceAccounts: true
+  services: true
 
 ## Deployment strategy / DaemonSet updateStrategy
 ##

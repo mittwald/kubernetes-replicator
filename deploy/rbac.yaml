@@ -13,7 +13,7 @@ rules:
   resources: [ "namespaces" ]
   verbs: [ "get", "watch", "list" ]
 - apiGroups: [""] # "" indicates the core API group
-  resources: ["secrets", "configmaps", "serviceaccounts"]
+  resources: ["secrets", "configmaps", "serviceaccounts", "services"]
   verbs: ["get", "watch", "list", "create", "update", "patch", "delete"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "rolebindings"]

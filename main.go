@@ -11,6 +11,7 @@ import (
 	"github.com/mittwald/kubernetes-replicator/replicate/role"
 	"github.com/mittwald/kubernetes-replicator/replicate/rolebinding"
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
+	"github.com/mittwald/kubernetes-replicator/replicate/service"
 	"github.com/mittwald/kubernetes-replicator/replicate/serviceaccount"
 
 	log "github.com/sirupsen/logrus"
@@ -36,6 +37,7 @@ func init() {
 	flag.BoolVar(&f.ReplicateRoles, "replicate-roles", true, "Enable replication of roles")
 	flag.BoolVar(&f.ReplicateRoleBindings, "replicate-role-bindings", true, "Enable replication of role bindings")
 	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
+	flag.BoolVar(&f.ReplicateServices, "replicate-services", true, "Enable replication of services")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -115,6 +117,12 @@ func main() {
 		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
 		go serviceAccountRepl.Run()
 		enabledReplicators = append(enabledReplicators, serviceAccountRepl)
+	}
+
+	if f.ReplicateServices {
+		serviceRepl := service.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		go serviceRepl.Run()
+		enabledReplicators = append(enabledReplicators, serviceRepl)
 	}
 
 	h := liveness.Handler{

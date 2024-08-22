@@ -24,7 +24,7 @@ spec:
       - name: kubernetes-replicator
         securityContext: {}
         image: quay.io/mittwald/kubernetes-replicator:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         args: []
         ports:
         - name: health

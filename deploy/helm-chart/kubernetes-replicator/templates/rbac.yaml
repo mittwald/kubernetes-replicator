@@ -40,6 +40,9 @@ rules:
 {{- if .serviceAccounts }}
     - serviceaccounts
 {{- end }}
+{{- if .services }}
+    - services
+{{- end }}
     verbs:
     - get
     - watch
