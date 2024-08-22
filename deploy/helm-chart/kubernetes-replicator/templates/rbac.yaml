@@ -27,7 +27,7 @@ rules:
     - watch
     - list
 {{ with .Values.replicationEnabled }}
-{{- if or .secrets .configMaps .serviceAccounts }}
+{{- if or .secrets .configMaps .serviceAccounts .services }}
   - apiGroups:
     - ""
     resources:
