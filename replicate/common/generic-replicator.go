@@ -48,20 +48,20 @@ type GenericReplicator struct {
 
 	// ReplicateToList is a set that caches the names of all secrets that have a
 	// "replicate-to" annotation.
-	ReplicateToList map[string]struct{}
+	ReplicateToList GenericMap[string, struct{}]
 
 	// ReplicateToMatchingList is a set that caches the names of all secrets
 	// that have a "replicate-to-matching" annotation.
-	ReplicateToMatchingList map[string]labels.Selector
+	ReplicateToMatchingList GenericMap[string, labels.Selector]
 }
 
-// NewReplicator creates a new generic replicator
+// NewGenericReplicator creates a new generic replicator
 func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 	repl := GenericReplicator{
 		ReplicatorConfig:        config,
 		DependencyMap:           make(map[string]map[string]interface{}),
-		ReplicateToList:         make(map[string]struct{}),
-		ReplicateToMatchingList: make(map[string]labels.Selector),
+		ReplicateToList:         GenericMap[string, struct{}]{},
+		ReplicateToMatchingList: GenericMap[string, labels.Selector]{},
 	}
 
 	store, controller := cache.NewInformer(
@@ -150,16 +150,16 @@ func (r *GenericReplicator) Run() {
 // annotations into newly created namespaces.
 func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 	logger := log.WithField("kind", r.Kind).WithField("target", ns.Name)
-	for sourceKey := range r.ReplicateToList {
+	r.ReplicateToList.Range(func(sourceKey string, _ struct{}) bool {
 		logger := logger.WithField("resource", sourceKey)
 		obj, exists, err := r.Store.GetByKey(sourceKey)
 
 		if err != nil {
 			log.WithError(err).Error("error fetching object from store")
-			continue
+			return true
 		} else if !exists {
 			log.Warn("object not found in store")
-			continue
+			return true
 		}
 
 		objectMeta := MustGetObject(obj)
@@ -175,29 +175,32 @@ func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {
 			}
 
 		}
-	}
+
+		return true
+	})
 
 	namespaceLabels := labels.Set(ns.Labels)
-	for sourceKey, selector := range r.ReplicateToMatchingList {
+	r.ReplicateToMatchingList.Range(func(sourceKey string, selector labels.Selector) bool {
 		logger := logger.WithField("resource", sourceKey)
 
 		obj, exists, err := r.Store.GetByKey(sourceKey)
 		if err != nil {
 			log.WithError(err).Error("error fetching object from store")
-			continue
+			return true
 		} else if !exists {
 			log.Warn("object not found in store")
-			continue
+			return true
 		}
 
 		if !selector.Matches(namespaceLabels) {
-			continue
+			return true
 		}
 
 		if _, err := r.replicateResourceToNamespaces(obj, []v1.Namespace{*ns}); err != nil {
 			logger.WithError(err).Error("error while replicating object to namespace")
 		}
-	}
+		return true
+	})
 }
 
 // NamespaceUpdated checks if namespace's labels changed and deletes any 'replicate-to-matching' resources
@@ -217,21 +220,22 @@ func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Name
 		var oldLabelSet labels.Set
 		oldLabelSet = nsOld.Labels
 		// check 'replicate-to-matching' resources against new labels
-		for sourceKey, selector := range r.ReplicateToMatchingList {
+		r.ReplicateToMatchingList.Range(func(sourceKey string, selector labels.Selector) bool {
 			if selector.Matches(oldLabelSet) && !selector.Matches(newLabelSet) {
 				obj, exists, err := r.Store.GetByKey(sourceKey)
 				if err != nil {
 					log.WithError(err).Error("error fetching object from store")
-					continue
+					return true
 				} else if !exists {
 					log.Warn("object not found in store")
-					continue
+					return true
 				}
 				// delete resource from the updated namespace
 				logger.Infof("removed %s %s from %s", r.Kind, sourceKey, nsNew.Name)
 				r.DeleteResourceInNamespaces(obj, &v1.NamespaceList{Items: []v1.Namespace{*nsNew}})
 			}
-		}
+			return true
+		})
 
 		// replicate resources to updated ns
 		logger.Infof("labels of namespace %s changed, attempting to replicate %ss", nsNew.Name, r.Kind)
@@ -267,7 +271,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 
 	// Match resources with "replicate-to" annotation
 	if namespacePatterns, ok := annotations[ReplicateTo]; ok {
-		r.ReplicateToList[sourceKey] = struct{}{}
+		r.ReplicateToList.Store(sourceKey, struct{}{})
 
 		namespacesFromStore := namespaceWatcher.NamespaceStore.List()
 		namespaces := make([]v1.Namespace, len(namespacesFromStore))
@@ -278,26 +282,26 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 			logger.WithError(err).Errorf("could not replicate object to other namespaces")
 		}
 	} else {
-		delete(r.ReplicateToList, sourceKey)
+		r.ReplicateToList.Delete(sourceKey)
 	}
 
 	// Match resources with "replicate-to-matching" annotations
 	if namespaceSelectorString, ok := annotations[ReplicateToMatching]; ok {
 		namespaceSelector, err := labels.Parse(namespaceSelectorString)
 		if err != nil {
-			delete(r.ReplicateToMatchingList, sourceKey)
+			r.ReplicateToMatchingList.Delete(sourceKey)
 			logger.WithError(err).Error("failed to parse label selector")
 
 			return
 		}
 
-		r.ReplicateToMatchingList[sourceKey] = namespaceSelector
+		r.ReplicateToMatchingList.Store(sourceKey, namespaceSelector)
 
 		if err := r.replicateResourceToMatchingNamespacesByLabel(ctx, obj, namespaceSelector); err != nil {
 			logger.WithError(err).Error("error while replicating by label selector")
 		}
 	} else {
-		delete(r.ReplicateToMatchingList, sourceKey)
+		r.ReplicateToMatchingList.Delete(sourceKey)
 	}
 }
 
@@ -458,7 +462,7 @@ func (r *GenericReplicator) ResourceDeleted(source interface{}) {
 	r.ResourceDeletedReplicateTo(source)
 	r.ResourceDeletedReplicateFrom(source)
 
-	delete(r.ReplicateToList, sourceKey)
+	r.ReplicateToList.Delete(sourceKey)
 
 }
 
