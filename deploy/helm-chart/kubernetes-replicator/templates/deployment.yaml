@@ -48,6 +48,7 @@ spec:
             - -replicate-roles={{ .Values.replicationEnabled.roles }}
             - -replicate-role-bindings={{ .Values.replicationEnabled.roleBindings }}
             - -replicate-service-accounts={{ .Values.replicationEnabled.serviceAccounts }}
+            - -replicate-services={{ .Values.replicationEnabled.services }}
             {{- with .Values.args }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

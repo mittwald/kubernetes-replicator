@@ -14,5 +14,6 @@ type flags struct {
 	ReplicateConfigMaps      bool
 	ReplicateRoles           bool
 	ReplicateRoleBindings    bool
+	ReplicateServices        bool
 	ReplicateServiceAccounts bool
 }
