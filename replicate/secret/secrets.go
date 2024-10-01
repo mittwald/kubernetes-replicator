@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,14 +26,15 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new secret replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
-			Kind:         "Secret",
-			ObjType:      &v1.Secret{},
-			AllowAll:     allowAll,
-			ResyncPeriod: resyncPeriod,
-			Client:       client,
+			Kind:          "Secret",
+			ObjType:       &v1.Secret{},
+			AllowAll:      allowAll,
+			SyncByContent: syncByContent,
+			ResyncPeriod:  resyncPeriod,
+			Client:        client,
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
 				return client.CoreV1().Secrets("").List(context.TODO(), lo)
 			},
@@ -69,7 +71,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetVersion, ok := target.Annotations[common.ReplicatedFromVersionAnnotation]
 	sourceVersion := source.ResourceVersion
 
-	if ok && targetVersion == sourceVersion {
+	if ok && targetVersion == sourceVersion && !r.SyncByContent {
 		logger.Debugf("target %s is already up-to-date", common.MustGetKey(target))
 		return nil
 	}
@@ -82,9 +84,18 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	prevKeys, hasPrevKeys := common.PreviouslyPresentKeys(&targetCopy.ObjectMeta)
 	replicatedKeys := make([]string, 0)
 
+	dataChanged := false
 	for key, value := range source.Data {
 		newValue := make([]byte, len(value))
 		copy(newValue, value)
+		oldValue, ok := targetCopy.Data[key]
+		if ok {
+			if bytes.Compare(newValue, oldValue) != 0 {
+				dataChanged = true
+			}
+		} else {
+			dataChanged = true
+		}
 		targetCopy.Data[key] = newValue
 
 		replicatedKeys = append(replicatedKeys, key)
@@ -95,7 +106,13 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 		for k := range prevKeys {
 			logger.Debugf("removing previously present key %s: not present in source any more", k)
 			delete(targetCopy.Data, k)
+			dataChanged = true
 		}
+	}
+
+	if !dataChanged {
+		logger.Debugf("target values of %s are already up-to-date", common.MustGetKey(target))
+		return nil
 	}
 
 	sort.Strings(replicatedKeys)
