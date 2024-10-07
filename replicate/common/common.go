@@ -56,7 +56,7 @@ func CopyAnnotations[I, O Annotatable](input I, output O) {
 	strip, ok := val[StripAnnotations]
 	if !ok || strings.ToLower(strip) != "true" {
 		for k, v := range val {
-			if strings.HasPrefix(k, Prefix) {
+			if strings.HasPrefix(k, ReplicatorPrefix) {
 				continue
 			}
 			copy[k] = v
