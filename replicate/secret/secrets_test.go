@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -25,8 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -63,55 +59,6 @@ func (pf *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 
 	b.WriteByte('\n')
 	return b.Bytes(), nil
-}
-
-func incrementResourceVersion(obj metav1.Object) {
-	rv := obj.GetResourceVersion()
-	if rv == "" {
-		obj.SetResourceVersion("1")
-		log.Debugf("### initialized resource version of %s/%s: %s", obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
-		return
-	}
-	if i, err := strconv.Atoi(rv); err == nil {
-		obj.SetResourceVersion(strconv.Itoa(i + 1))
-		log.Debugf("### incremented resource version of %s/%s: %s", obj.GetNamespace(), obj.GetName(), obj.GetResourceVersion())
-	} else {
-		log.Errorf("### error parsing resource version of %s/%s: %s", obj.GetNamespace(), obj.GetName(), rv)
-	}
-}
-
-// setupFakeClientSet creates a fake.Clientset with a reactor that increments the resource version
-func setupFakeClientSet() *fake.Clientset {
-	fakeClientSet := fake.NewClientset()
-
-	fakeClientSet.PrependReactor("*", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-		switch a := action.(type) {
-		case k8stesting.CreateAction:
-			obj := a.GetObject().(metav1.Object)
-			incrementResourceVersion(obj)
-		case k8stesting.UpdateAction:
-			obj := a.GetObject().(metav1.Object)
-			incrementResourceVersion(obj)
-		case k8stesting.PatchAction:
-			patchImpl, ok := a.(k8stesting.PatchActionImpl)
-			if !ok {
-				return false, nil, nil
-			}
-			existingObj, err := fakeClientSet.Tracker().Get(patchImpl.Resource, patchImpl.GetNamespace(), patchImpl.Name)
-			if existingObj == nil {
-				log.Errorf("### existing object not found: %s/%s", patchImpl.GetNamespace(), patchImpl.Name)
-				return false, nil, nil
-			}
-			incrementResourceVersion(existingObj.(metav1.Object))
-			err = fakeClientSet.Tracker().Update(patchImpl.Resource, existingObj, patchImpl.GetNamespace())
-			if err != nil {
-				return false, nil, err
-			}
-		}
-		return false, nil, nil
-	})
-
-	return fakeClientSet
 }
 
 func setupRealClientSet(t *testing.T) *kubernetes.Clientset {
@@ -1343,7 +1290,7 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 	log.SetFormatter(&PlainFormatter{})
 
 	prefix := namespacePrefix()
-	client := setupFakeClientSet()
+	client := setupRealClientSet(t)
 	ctx := context.TODO()
 
 	repl := NewReplicator(client, 60*time.Second, false, true)
