@@ -2,13 +2,15 @@ package common
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func GetKeysFromBinaryMap(data map[string][]byte) []string {
@@ -48,10 +50,13 @@ func MustGetObject(obj interface{}) metav1.Object {
 		return nil
 	}
 
-	if oma, ok := obj.(metav1.ObjectMetaAccessor); ok {
-		return oma.GetObjectMeta()
-	} else if o, ok := obj.(metav1.Object); ok {
+	switch o := obj.(type) {
+	case metav1.ObjectMetaAccessor:
+		return o.GetObjectMeta()
+	case metav1.Object:
 		return o
+	case cache.DeletedFinalStateUnknown:
+		return MustGetObject(o.Obj)
 	}
 
 	panic(errors.Errorf("Unknown type: %v", reflect.TypeOf(obj)))
