@@ -4,6 +4,6 @@ description: Controller for replicating secrets+configmaps across namespaces
 
 type: application
 
-version: 2.10.2
+version: 2.10.3
 
 appVersion: v2.10.2

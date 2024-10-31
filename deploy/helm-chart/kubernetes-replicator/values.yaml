@@ -59,9 +59,17 @@ tolerations: []
 
 affinity: {}
 
-podLabels: {}
+# Deployment annotations
+annotations: {}
 
+# Deployment labels
+labels: {}
+
+# Pod annotations
 podAnnotations: {}
+
+# Pod labels
+podLabels: {}
 
 livenessProbe:
   initialDelaySeconds: 60
