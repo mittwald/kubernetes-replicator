@@ -1,6 +1,7 @@
 package configmap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,14 +26,15 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new config map replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
-			Kind:         "ConfigMap",
-			ObjType:      &v1.ConfigMap{},
-			AllowAll:     allowAll,
-			ResyncPeriod: resyncPeriod,
-			Client:       client,
+			Kind:          "ConfigMap",
+			ObjType:       &v1.ConfigMap{},
+			AllowAll:      allowAll,
+			SyncByContent: syncByContent,
+			ResyncPeriod:  resyncPeriod,
+			Client:        client,
 			ListFunc: func(lo metav1.ListOptions) (runtime.Object, error) {
 				return client.CoreV1().ConfigMaps("").List(context.TODO(), lo)
 			},
@@ -65,7 +67,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetVersion, ok := target.Annotations[common.ReplicatedFromVersionAnnotation]
 	sourceVersion := source.ResourceVersion
 
-	if ok && targetVersion == sourceVersion {
+	if ok && targetVersion == sourceVersion && !r.SyncByContent {
 		logger.Debugf("target %s is already up-to-date", common.MustGetKey(target))
 		return nil
 	}
@@ -78,7 +80,16 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	prevKeys, hasPrevKeys := common.PreviouslyPresentKeys(&targetCopy.ObjectMeta)
 	replicatedKeys := make([]string, 0)
 
+	dataChanged := false
 	for key, value := range source.Data {
+		oldValue, ok := targetCopy.Data[key]
+		if ok {
+			if strings.Compare(value, oldValue) != 0 {
+				dataChanged = true
+			}
+		} else {
+			dataChanged = true
+		}
 		targetCopy.Data[key] = value
 
 		replicatedKeys = append(replicatedKeys, key)
@@ -86,9 +97,21 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	}
 
 	if source.BinaryData != nil {
-		targetCopy.BinaryData = make(map[string][]byte)
+		if targetCopy.BinaryData == nil {
+			targetCopy.BinaryData = make(map[string][]byte)
+		}
 		for key, value := range source.BinaryData {
-			targetCopy.BinaryData[key] = value
+			newValue := make([]byte, len(value))
+			copy(newValue, value)
+			oldValue, ok := targetCopy.BinaryData[key]
+			if ok {
+				if bytes.Compare(newValue, oldValue) != 0 {
+					dataChanged = true
+				}
+			} else {
+				dataChanged = true
+			}
+			targetCopy.BinaryData[key] = newValue
 
 			replicatedKeys = append(replicatedKeys, key)
 			delete(prevKeys, key)
@@ -100,7 +123,13 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 			logger.Debugf("removing previously present key %s: not present in source any more", k)
 			delete(targetCopy.Data, k)
 			delete(targetCopy.BinaryData, k)
+			dataChanged = true
 		}
+	}
+
+	if !dataChanged {
+		logger.Debugf("target values of %s are already up-to-date", common.MustGetKey(target))
+		return nil
 	}
 
 	sort.Strings(replicatedKeys)
