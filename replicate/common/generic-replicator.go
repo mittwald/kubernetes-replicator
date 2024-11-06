@@ -3,12 +3,13 @@ package common
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -22,13 +23,14 @@ import (
 )
 
 type ReplicatorConfig struct {
-	Kind         string
-	Client       kubernetes.Interface
-	ResyncPeriod time.Duration
-	AllowAll     bool
-	ListFunc     cache.ListFunc
-	WatchFunc    cache.WatchFunc
-	ObjType      runtime.Object
+	Kind          string
+	Client        kubernetes.Interface
+	ResyncPeriod  time.Duration
+	AllowAll      bool
+	SyncByContent bool
+	ListFunc      cache.ListFunc
+	WatchFunc     cache.WatchFunc
+	ObjType       runtime.Object
 }
 
 type UpdateFuncs struct {
@@ -44,6 +46,7 @@ type GenericReplicator struct {
 	Controller cache.Controller
 
 	DependencyMap map[string]map[string]interface{}
+	DependentMap  map[string]string
 	UpdateFuncs   UpdateFuncs
 
 	// ReplicateToList is a set that caches the names of all secrets that have a
@@ -60,6 +63,7 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 	repl := GenericReplicator{
 		ReplicatorConfig:        config,
 		DependencyMap:           make(map[string]map[string]interface{}),
+		DependentMap:            make(map[string]string),
 		ReplicateToList:         GenericMap[string, struct{}]{},
 		ReplicateToMatchingList: GenericMap[string, labels.Selector]{},
 	}
@@ -257,6 +261,24 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 			logger.WithError(err).Error("failed to update cache")
 		}
 	}
+	source, ok := r.DependentMap[sourceKey]
+	if ok {
+		logger.Debugf("objectMeta %s has source %s", sourceKey, source)
+
+		sourceObject, exists, err := r.Store.GetByKey(source)
+		if err != nil {
+			logger.Debugf("could not get source %s %s: %s", r.Kind, source, err)
+			return
+		} else if !exists {
+			logger.Debugf("could not get source %s %s: does not exist", r.Kind, source)
+			return
+		}
+		targetMap := map[string]interface{}{MustGetKey(obj): ""}
+		if err := r.updateDependents(sourceObject, targetMap); err != nil {
+			logger.WithError(err).
+				Errorf("Failed to update cache for %s: %v", MustGetKey(objectMeta), err)
+		}
+	}
 
 	annotations := objectMeta.GetAnnotations()
 
@@ -322,6 +344,10 @@ func (r *GenericReplicator) resourceAddedReplicateFrom(sourceLocation string, ta
 	}
 
 	r.DependencyMap[sourceLocation][cacheKey] = nil
+
+	if _, ok := r.DependentMap[cacheKey]; !ok {
+		r.DependentMap[cacheKey] = sourceLocation
+	}
 
 	sourceObject, exists, err := r.Store.GetByKey(sourceLocation)
 	if err != nil {

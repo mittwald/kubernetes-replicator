@@ -4,6 +4,13 @@ metadata:
   name: {{ include "kubernetes-replicator.fullname" . }}
   labels:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
+    {{- if .Values.labels }}
+    {{- toYaml .Values.labels | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: 1
   {{- with .Values.updateStrategy }}

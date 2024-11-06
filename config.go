@@ -15,4 +15,5 @@ type flags struct {
 	ReplicateRoles           bool
 	ReplicateRoleBindings    bool
 	ReplicateServiceAccounts bool
+	SyncByContent            bool
 }

@@ -157,6 +157,17 @@ data: {}
 The replicator will then copy the `data` attribute of the referenced object into the annotated object and keep them in
 sync.
 
+By default, the replicator adds an annotation `replicator.v1.mittwald.de/replicated-from-version` to the target object.
+This annotation contains the resource-version of the source object at the time of replication.
+
+##### Sync by Content
+
+When the target object is re-applied with an empty `data` attribute, the replicator will not automatically perform replication.
+The reason is that the target already has the `replicated-from-version` annotation with a matching source resource-version.
+For Secrets and ConfigMaps, there is the option to synchronize _based on the content_, ignoring the `replicated-from-version` annotation.
+
+To activate this mode, start the replicator with the `--sync-by-content` flag.
+
 #### Special case: TLS secrets
 
 Secrets of type `kubernetes.io/tls` are treated in a special way and need to have a `data["tls.crt"]` and a
