@@ -84,3 +84,6 @@ readinessProbe:
   timeoutSeconds: 1
   failureThreshold: 3
   successThreshold: 1
+
+# Allow volumes to mount service account token manually if someone needs it
+volumes: []
