@@ -166,7 +166,7 @@ When the target object is re-applied with an empty `data` attribute, the replica
 The reason is that the target already has the `replicated-from-version` annotation with a matching source resource-version.
 For Secrets and ConfigMaps, there is the option to synchronize _based on the content_, ignoring the `replicated-from-version` annotation.
 
-To activate this mode, start the replicator with the `--sync-by-content` flag.
+To activate this mode, start the replicator with the `-sync-by-content` flag.
 
 #### Special case: TLS secrets
 
