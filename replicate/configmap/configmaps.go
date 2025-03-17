@@ -26,7 +26,7 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new config map replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool, metrics *common.ReplicatorMetrics) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:          "ConfigMap",
@@ -41,6 +41,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.CoreV1().ConfigMaps("").Watch(context.TODO(), lo)
 			},
+			Metrics: metrics.WithKind("ConfigMap"),
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -140,6 +141,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	targetCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
 
+	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, "Update")
 	s, err := r.Client.CoreV1().ConfigMaps(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
@@ -243,9 +245,11 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var obj interface{}
 	if exists {
 		logger.Debugf("Updating existing secret %s/%s", target.Name, resourceCopy.Name)
+		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, "Update")
 		obj, err = r.Client.CoreV1().ConfigMaps(target.Name).Update(context.TODO(), resourceCopy, metav1.UpdateOptions{})
 	} else {
 		logger.Debugf("Creating a new secret secret %s/%s", target.Name, resourceCopy.Name)
+		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, "Create")
 		obj, err = r.Client.CoreV1().ConfigMaps(target.Name).Create(context.TODO(), resourceCopy, metav1.CreateOptions{})
 	}
 	if err != nil {
@@ -284,6 +288,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent config map %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
+	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, "Patch")
 	s, err := r.Client.CoreV1().ConfigMaps(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching secret %s: %v", dependentKey, err)
@@ -309,6 +314,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	if strings.Join(resourceKeys, ",") == object.Annotations[common.ReplicatedKeysAnnotation] {
 		logger.Debugf("Deleting %s", targetLocation)
+		r.Metrics.OperationCounterInc(object.Namespace, object.Name, "Delete")
 		if err := r.Client.CoreV1().ConfigMaps(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 			return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 		}
@@ -330,6 +336,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 			return errors.Wrapf(err, "error while building patch body for confimap %s: %v", object, err)
 		}
 
+		r.Metrics.OperationCounterInc(object.Namespace, object.Name, "Patch")
 		s, err := r.Client.CoreV1().ConfigMaps(object.Namespace).Patch(context.TODO(), object.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "error while patching secret %s: %v", s, err)
