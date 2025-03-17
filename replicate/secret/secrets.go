@@ -124,7 +124,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	targetCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
 
-	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, "Update")
+	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, common.Update)
 	s, err := r.Client.CoreV1().Secrets(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
@@ -205,11 +205,11 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var obj interface{}
 	if exists {
 		logger.Debugf("Updating existing secret %s/%s", target.Name, resourceCopy.Name)
-		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, "Update")
+		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, common.Update)
 		obj, err = r.Client.CoreV1().Secrets(target.Name).Update(context.TODO(), resourceCopy, metav1.UpdateOptions{})
 	} else {
 		logger.Debugf("Creating a new secret secret %s/%s", target.Name, resourceCopy.Name)
-		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, "Create")
+		r.Metrics.OperationCounterInc(target.Name, resourceCopy.Name, common.Create)
 		obj, err = r.Client.CoreV1().Secrets(target.Name).Create(context.TODO(), resourceCopy, metav1.CreateOptions{})
 	}
 	if err != nil {
@@ -272,7 +272,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent %s %s", r.Kind, dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, "Patch")
+	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, common.Patch)
 	s, err := r.Client.CoreV1().Secrets(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching secret %s: %v", dependentKey, err)
@@ -292,7 +292,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 	resourceKeys := strings.Join(common.GetKeysFromBinaryMap(object.Data), ",")
 	if resourceKeys == object.Annotations[common.ReplicatedKeysAnnotation] {
 		logger.Debugf("Deleting %s", targetLocation)
-		r.Metrics.OperationCounterInc(object.Namespace, object.Name, "Delete")
+		r.Metrics.OperationCounterInc(object.Namespace, object.Name, common.Delete)
 		if err := r.Client.CoreV1().Secrets(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 			return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 		}
@@ -314,7 +314,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 			return errors.Wrapf(err, "error while building patch body for confimap %s: %v", object, err)
 		}
 
-		r.Metrics.OperationCounterInc(object.Namespace, object.Name, "Patch")
+		r.Metrics.OperationCounterInc(object.Namespace, object.Name, common.Patch)
 		s, err := r.Client.CoreV1().Secrets(object.Namespace).Patch(context.TODO(), object.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "error while patching secret %s: %v", s, err)

@@ -81,7 +81,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
-	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, "Update")
+	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, common.Update)
 	s, err := r.Client.RbacV1().Roles(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
@@ -156,11 +156,11 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var obj interface{}
 	if exists {
 		logger.Debugf("Updating existing role %s/%s", target.Name, targetCopy.Name)
-		r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, "Update")
+		r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Update)
 		obj, err = r.Client.RbacV1().Roles(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	} else {
 		logger.Debugf("Creating a new role %s/%s", target.Name, targetCopy.Name)
-		r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, "Create")
+		r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Create)
 		obj, err = r.Client.RbacV1().Roles(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 	}
 	if err != nil {
@@ -198,7 +198,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent role %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
-	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, "Patch")
+	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, common.Patch)
 	s, err := r.Client.RbacV1().Roles(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching role %s: %v", dependentKey, err)
@@ -216,7 +216,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*rbacv1.Role)
 	logger.Debugf("Deleting %s", targetLocation)
-	r.Metrics.OperationCounterInc(object.Namespace, object.Name, "Delete")
+	r.Metrics.OperationCounterInc(object.Namespace, object.Name, common.Delete)
 	if err := r.Client.RbacV1().Roles(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}

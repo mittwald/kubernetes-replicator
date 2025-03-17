@@ -9,6 +9,15 @@ type ReplicatorMetrics struct {
 	OperationCounter *prometheus.CounterVec
 }
 
+type Operation string
+
+const (
+	Update Operation = "Update"
+	Patch  Operation = "Patch"
+	Create Operation = "Create"
+	Delete Operation = "Delete"
+)
+
 func NewMetrics(reg prometheus.Registerer) *ReplicatorMetrics {
 	m := &ReplicatorMetrics{
 		OperationCounter: prometheus.NewCounterVec(
@@ -18,7 +27,7 @@ func NewMetrics(reg prometheus.Registerer) *ReplicatorMetrics {
 				Name:      "operation_count",
 				Help:      "Counter for each operation to change a resource",
 			},
-			[]string{"kind", "namespace", "name", "operation_type"},
+			[]string{"kind", "namespace", "name", "operation"},
 		),
 	}
 	reg.MustRegister(m.OperationCounter)
@@ -30,6 +39,6 @@ func (self ReplicatorMetrics) WithKind(kind string) *ReplicatorMetrics {
 	return &self
 }
 
-func (self *ReplicatorMetrics) OperationCounterInc(namespace string, name string, operationType string) {
-	self.OperationCounter.With(prometheus.Labels{"kind": self.Kind, "namespace": namespace, "name": name, "operation_type": operationType}).Inc()
+func (self *ReplicatorMetrics) OperationCounterInc(namespace string, name string, operation Operation) {
+	self.OperationCounter.With(prometheus.Labels{"kind": self.Kind, "namespace": namespace, "name": name, "operation": string(operation)}).Inc()
 }
