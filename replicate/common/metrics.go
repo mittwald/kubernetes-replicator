@@ -23,7 +23,7 @@ func NewMetrics(reg prometheus.Registerer) *ReplicatorMetrics {
 		OperationCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "kubernetes_replicator",
-				Subsystem: "reconciliation",
+				Subsystem: "kube_api",
 				Name:      "operation_count",
 				Help:      "Counter for each operation to change a resource",
 			},
