@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/client-go/tools/clientcmd"
+
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +85,10 @@ func TestSecretReplicator(t *testing.T) {
 
 	client := setupRealClientSet(t)
 
-	repl := NewReplicator(client, 60*time.Second, false, false)
+	reg := prometheus.NewRegistry()
+	metrics := common.NewMetrics(reg)
+
+	repl := NewReplicator(client, 60*time.Second, false, false, metrics)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
@@ -1293,7 +1298,10 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 	client := setupRealClientSet(t)
 	ctx := context.TODO()
 
-	repl := NewReplicator(client, 60*time.Second, false, true)
+	reg := prometheus.NewRegistry()
+	metrics := common.NewMetrics(reg)
+
+	repl := NewReplicator(client, 60*time.Second, false, true, metrics)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)

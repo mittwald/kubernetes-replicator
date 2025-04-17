@@ -24,7 +24,7 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new serviceaccount replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool, metrics *common.ReplicatorMetrics) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "ServiceAccount",
@@ -38,6 +38,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.CoreV1().ServiceAccounts("").Watch(context.TODO(), lo)
 			},
+			Metrics: metrics.WithKind("ServiceAccount"),
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -80,6 +81,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
+	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, common.Update)
 	s, err := r.Client.CoreV1().ServiceAccounts(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
@@ -154,11 +156,13 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	if exists {
 		if err == nil {
 			logger.Debugf("Updating existing serviceAccount %s/%s", target.Name, targetCopy.Name)
+			r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Update)
 			obj, err = r.Client.CoreV1().ServiceAccounts(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
 	} else {
 		if err == nil {
 			logger.Debugf("Creating a new serviceAccount %s/%s", target.Name, targetCopy.Name)
+			r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Create)
 			obj, err = r.Client.CoreV1().ServiceAccounts(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 		}
 	}
@@ -198,6 +202,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent serviceAccount %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
+	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, common.Patch)
 	s, err := r.Client.CoreV1().ServiceAccounts(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching serviceAccount %s: %v", dependentKey, err)
@@ -215,6 +220,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*corev1.ServiceAccount)
 	logger.Debugf("Deleting %s", targetLocation)
+	r.Metrics.OperationCounterInc(object.Namespace, object.Name, common.Delete)
 	if err := r.Client.CoreV1().ServiceAccounts(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}
