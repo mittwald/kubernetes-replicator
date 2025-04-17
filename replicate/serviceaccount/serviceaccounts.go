@@ -76,6 +76,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.ImagePullSecrets = source.ImagePullSecrets
 
 	log.Infof("updating target %s/%s", target.Namespace, target.Name)
+	common.CopyAnnotations(source, target)
 
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
@@ -146,6 +147,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	targetCopy.Name = source.Name
 	targetCopy.Labels = labelsCopy
 	targetCopy.ImagePullSecrets = source.ImagePullSecrets
+	common.CopyAnnotations(source, targetCopy)
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
