@@ -16,6 +16,14 @@ replicationEnabled:
   roles: true
   roleBindings: true
   serviceAccounts: true
+  privileges:
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete 
 
 ## Deployment strategy / DaemonSet updateStrategy
 ##

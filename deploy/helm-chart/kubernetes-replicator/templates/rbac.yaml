@@ -23,7 +23,7 @@ rules:
     resources:
     - namespaces
     verbs:
-    - get
+    - get 
     - watch
     - list
 {{ with .Values.replicationEnabled }}
@@ -40,14 +40,7 @@ rules:
 {{- if .serviceAccounts }}
     - serviceaccounts
 {{- end }}
-    verbs:
-    - get
-    - watch
-    - list
-    - create
-    - update
-    - patch
-    - delete
+    verbs:  {{ .privileges | toYaml | nindent 4 }}
 {{- end }}
 {{- if or .roles .roleBindings }}
   - apiGroups:
@@ -70,17 +63,9 @@ rules:
 {{- end }}
 {{- end }}
 {{- range .Values.serviceAccount.privileges }}
-  - apiGroups: {{ .apiGroups | toYaml | nindent 6 }}
-    resources: {{ .resources | toYaml | nindent 6 }}
-    verbs:
-    - get
-    - watch
-    - list
-    - create
-    - update
-    - patch
-    - delete
-    - describe
+  - apiGroups: {{ .apiGroups | toYaml | nindent 4 }}
+    resources: {{ .resources | toYaml | nindent 4 }}
+    verbs: {{ .privileges | toYaml | nindent 4 }}
 {{- end }}
 ---
 kind: ClusterRoleBinding
