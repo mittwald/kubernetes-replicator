@@ -86,6 +86,7 @@ There are two general methods for push-based replication:
   apiVersion: v1
   kind: Secret
   metadata:
+    name: test-secret
     annotations:
       replicator.v1.mittwald.de/replicate-to: "my-ns-1,namespace-[0-9]*"
   data:
@@ -100,6 +101,7 @@ There are two general methods for push-based replication:
   apiVersion: v1
   kind: Secret
   metadata:
+    name: test-secret
     annotations:
       replicator.v1.mittwald.de/replicate-to-matching: >
         my-label=value,my-other-label,my-other-label notin (foo,bar)
@@ -132,6 +134,7 @@ permitting replication.
     apiVersion: v1
     kind: Secret
     metadata:
+      name: test-secret
       annotations:
         replicator.v1.mittwald.de/replication-allowed: "true"
         replicator.v1.mittwald.de/replication-allowed-namespaces: "my-ns-1,namespace-[0-9]*"
