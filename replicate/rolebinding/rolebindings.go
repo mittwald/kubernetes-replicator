@@ -26,7 +26,7 @@ type Replicator struct {
 const sleepTime = 100 * time.Millisecond
 
 // NewReplicator creates a new secret replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool, metrics *common.ReplicatorMetrics) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "RoleBinding",
@@ -40,6 +40,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.RbacV1().RoleBindings("").Watch(context.TODO(), lo)
 			},
+			Metrics: metrics.WithKind("RoleBinding"),
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -82,6 +83,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 
+	r.Metrics.OperationCounterInc(target.Namespace, targetCopy.Name, common.Update)
 	s, err := r.Client.RbacV1().RoleBindings(target.Namespace).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 	if err != nil {
 		err = errors.Wrapf(err, "Failed updating target %s/%s", target.Namespace, targetCopy.Name)
@@ -159,11 +161,13 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	if exists {
 		if err == nil {
 			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
+			r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Update)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
 	} else {
 		if err == nil {
 			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
+			r.Metrics.OperationCounterInc(target.Name, targetCopy.Name, common.Create)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 		}
 	}
@@ -178,7 +182,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	return nil
 }
 
-//Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
+// Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
 func (r *Replicator) canReplicate(targetNameSpace string, roleRef string) (err error) {
 	for i := 0; i < 5; i++ {
 		_, err = r.Client.RbacV1().Roles(targetNameSpace).Get(context.TODO(), roleRef, metav1.GetOptions{})
@@ -216,6 +220,7 @@ func (r *Replicator) PatchDeleteDependent(sourceKey string, target interface{}) 
 	logger.Debugf("clearing dependent roleBinding %s", dependentKey)
 	logger.Tracef("patch body: %s", string(patchBody))
 
+	r.Metrics.OperationCounterInc(targetObject.Namespace, targetObject.Name, common.Patch)
 	s, err := r.Client.RbacV1().RoleBindings(targetObject.Namespace).Patch(context.TODO(), targetObject.Name, types.JSONPatchType, patchBody, metav1.PatchOptions{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while patching role %s: %v", dependentKey, err)
@@ -233,6 +238,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*rbacv1.RoleBinding)
 	logger.Debugf("Deleting %s", targetLocation)
+	r.Metrics.OperationCounterInc(object.Namespace, object.Name, common.Delete)
 	if err := r.Client.RbacV1().RoleBindings(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}

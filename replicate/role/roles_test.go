@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,8 +11,12 @@ import (
 	"testing"
 	"time"
 
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -79,7 +81,10 @@ func TestRoleReplicator(t *testing.T) {
 	prefix := namespacePrefix()
 	client := kubernetes.NewForConfigOrDie(config)
 
-	repl := NewReplicator(client, 60*time.Second, false)
+	reg := prometheus.NewRegistry()
+	metrics := common.NewMetrics(reg)
+
+	repl := NewReplicator(client, 60*time.Second, false, metrics)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)

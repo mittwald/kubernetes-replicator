@@ -31,6 +31,7 @@ type ReplicatorConfig struct {
 	ListFunc      cache.ListFunc
 	WatchFunc     cache.WatchFunc
 	ObjType       runtime.Object
+	Metrics       *ReplicatorMetrics
 }
 
 type UpdateFuncs struct {

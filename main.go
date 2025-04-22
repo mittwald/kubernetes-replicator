@@ -19,6 +19,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var f flags
@@ -88,32 +91,35 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
+	reg := prometheus.NewRegistry()
+	metrics := common.NewMetrics(reg)
+
 	if f.ReplicateSecrets {
-		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent)
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, metrics)
 		go secretRepl.Run()
 		enabledReplicators = append(enabledReplicators, secretRepl)
 	}
 
 	if f.ReplicateConfigMaps {
-		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent)
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, metrics)
 		go configMapRepl.Run()
 		enabledReplicators = append(enabledReplicators, configMapRepl)
 	}
 
 	if f.ReplicateRoles {
-		roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll, metrics)
 		go roleRepl.Run()
 		enabledReplicators = append(enabledReplicators, roleRepl)
 	}
 
 	if f.ReplicateRoleBindings {
-		roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll, metrics)
 		go roleBindingRepl.Run()
 		enabledReplicators = append(enabledReplicators, roleBindingRepl)
 	}
 
 	if f.ReplicateServiceAccounts {
-		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll, metrics)
 		go serviceAccountRepl.Run()
 		enabledReplicators = append(enabledReplicators, serviceAccountRepl)
 	}
@@ -126,6 +132,7 @@ func main() {
 
 	http.Handle("/healthz", &h)
 	http.Handle("/readyz", &h)
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
 	err = http.ListenAndServe(f.StatusAddr, nil)
 	if err != nil {
 		log.Fatal(err)
