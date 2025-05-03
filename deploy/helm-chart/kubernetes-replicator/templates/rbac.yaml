@@ -22,10 +22,7 @@ rules:
     - ""
     resources:
     - namespaces
-    verbs:
-    - get 
-    - watch
-    - list
+    verbs: {{ .Values.namespacesPrivileges | toYaml | nindent 4 }}
 {{ with .Values.replicationEnabled }}
 {{- if or .secrets .configMaps .serviceAccounts }}
   - apiGroups:
@@ -52,14 +49,7 @@ rules:
 {{- if .roleBindings }}
     - rolebindings
 {{- end }}
-    verbs:
-    - get
-    - watch
-    - list
-    - create
-    - update
-    - patch
-    - delete
+    verbs:  {{ .rolesPrivileges | toYaml | nindent 4 }}
 {{- end }}
 {{- end }}
 {{- range .Values.serviceAccount.privileges }}
