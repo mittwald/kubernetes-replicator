@@ -10,12 +10,32 @@ automountServiceAccountToken: true
 # args:
 # - -resync-period=30m
 # - -allow-all=false
+namespacesPrivileges:
+  - get
+  - watch
+  - list
 replicationEnabled:
   secrets: true
   configMaps: true
   roles: true
   roleBindings: true
   serviceAccounts: true
+  privileges:
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete 
+  rolesPrivileges:
+  - get
+  - watch
+  - list
+  - create
+  - update
+  - patch
+  - delete 
 
 ## Deployment strategy / DaemonSet updateStrategy
 ##
