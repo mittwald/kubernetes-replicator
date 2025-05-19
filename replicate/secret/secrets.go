@@ -26,7 +26,7 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new secret replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool, namespaceFilter *common.NamespaceFilter) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:          "Secret",
@@ -41,6 +41,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.CoreV1().Secrets("").Watch(context.TODO(), lo)
 			},
+			NamespaceFilter: namespaceFilter,
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
