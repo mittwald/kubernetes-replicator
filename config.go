@@ -16,4 +16,5 @@ type flags struct {
 	ReplicateRoleBindings    bool
 	ReplicateServiceAccounts bool
 	SyncByContent            bool
+	ExcludeNamespaces        string
 }
