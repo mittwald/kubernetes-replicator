@@ -73,6 +73,7 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	}
 
 	targetCopy := target.DeepCopy()
+
 	if targetCopy.Data == nil {
 		targetCopy.Data = make(map[string]string)
 	}
@@ -135,6 +136,8 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	sort.Strings(replicatedKeys)
 
 	logger.Infof("updating config map %s/%s", target.Namespace, target.Name)
+
+	common.CopyAnnotations(source, targetCopy)
 
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
@@ -236,6 +239,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	sort.Strings(replicatedKeys)
 	resourceCopy.Name = source.Name
 	resourceCopy.Labels = labelsCopy
+	common.CopyAnnotations(source, resourceCopy)
 	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
