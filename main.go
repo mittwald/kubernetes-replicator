@@ -37,6 +37,7 @@ func init() {
 	flag.BoolVar(&f.ReplicateRoleBindings, "replicate-role-bindings", true, "Enable replication of role bindings")
 	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.BoolVar(&f.SyncByContent, "sync-by-content", false, "Always compare the contents of source and target resources and force them to be the same")
+	flag.StringVar(&f.ExcludeNamespaces, "exclude-namespaces", "", "Comma-separated list of regex patterns for namespaces to exclude from replication")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -88,14 +89,17 @@ func main() {
 
 	client = kubernetes.NewForConfigOrDie(config)
 
+	excludePatterns := strings.Split(f.ExcludeNamespaces, ",")
+	filter := common.NewNamespaceFilter(excludePatterns)
+
 	if f.ReplicateSecrets {
-		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent)
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
 		go secretRepl.Run()
 		enabledReplicators = append(enabledReplicators, secretRepl)
 	}
 
 	if f.ReplicateConfigMaps {
-		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent)
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
 		go configMapRepl.Run()
 		enabledReplicators = append(enabledReplicators, configMapRepl)
 	}

@@ -23,14 +23,15 @@ import (
 )
 
 type ReplicatorConfig struct {
-	Kind          string
-	Client        kubernetes.Interface
-	ResyncPeriod  time.Duration
-	AllowAll      bool
-	SyncByContent bool
-	ListFunc      cache.ListFunc
-	WatchFunc     cache.WatchFunc
-	ObjType       runtime.Object
+	Kind            string
+	Client          kubernetes.Interface
+	ResyncPeriod    time.Duration
+	AllowAll        bool
+	SyncByContent   bool
+	ListFunc        cache.ListFunc
+	WatchFunc       cache.WatchFunc
+	ObjType         runtime.Object
+	NamespaceFilter *NamespaceFilter
 }
 
 type UpdateFuncs struct {
@@ -87,6 +88,8 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 
 	repl.Store = store
 	repl.Controller = controller
+
+	repl.NamespaceFilter = config.NamespaceFilter
 
 	return &repl
 }
@@ -427,6 +430,14 @@ func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targe
 	cacheKey := MustGetKey(obj)
 
 	for _, namespace := range targets {
+		if r.NamespaceFilter != nil && r.NamespaceFilter.ShouldExclude(namespace.Name) {
+			log.WithFields(log.Fields{
+				"kind":      r.Kind,
+				"namespace": namespace.Name,
+			}).Info("Skipping excluded namespace")
+			continue
+		}
+
 		if innerErr := r.UpdateFuncs.ReplicateObjectTo(obj, &namespace); innerErr != nil {
 			err = multierror.Append(err, errors.Wrapf(innerErr, "Failed to replicate %s %s -> %s: %v",
 				r.Kind, cacheKey, namespace.Name, innerErr,

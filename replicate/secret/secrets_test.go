@@ -82,8 +82,9 @@ func TestSecretReplicator(t *testing.T) {
 	log.SetFormatter(&PlainFormatter{})
 
 	client := setupRealClientSet(t)
+	filter := common.NewNamespaceFilter([]string{})
 
-	repl := NewReplicator(client, 60*time.Second, false, false)
+	repl := NewReplicator(client, 60*time.Second, false, false, filter)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
@@ -1293,7 +1294,9 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 	client := setupRealClientSet(t)
 	ctx := context.TODO()
 
-	repl := NewReplicator(client, 60*time.Second, false, true)
+	filter := common.NewNamespaceFilter([]string{})
+
+	repl := NewReplicator(client, 60*time.Second, false, true, filter)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
