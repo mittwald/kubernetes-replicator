@@ -73,6 +73,9 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+# The number of old history to retain to allow rollback.
+revisionHistoryLimit: 10
+
 nodeSelector: {}
 
 tolerations: []
