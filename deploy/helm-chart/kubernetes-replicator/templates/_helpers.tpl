@@ -32,6 +32,13 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
+Create namespace used by the chart, defaulting to helm release namespace
+*/}}
+{{- define "kubernetes-replicator.namespace" -}}
+{{- default .Release.Namespace .Values.namespaceOverride -}}
+{{- end -}}
+
+{{/*
 Common labels
 */}}
 {{- define "kubernetes-replicator.labels" -}}
