@@ -5,6 +5,7 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+namespaceOverride: ""
 grantClusterAdmin: false
 automountServiceAccountToken: true
 # args:
