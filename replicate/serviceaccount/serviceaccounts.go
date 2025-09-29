@@ -93,7 +93,14 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 // ReplicateObjectTo copies the whole object to target namespace
 func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespace) error {
 	source := sourceObj.(*corev1.ServiceAccount)
-	targetLocation := fmt.Sprintf("%s/%s", target.Name, source.Name)
+
+	// Extract prefix and suffix annotations
+	prefix := source.Annotations[common.PrefixAnnotation]
+	suffix := source.Annotations[common.SuffixAnnotation]
+
+	// Generate target name using prefix and suffix
+	targetName := common.GenerateTargetName(source.Name, prefix, suffix)
+	targetLocation := fmt.Sprintf("%s/%s", target.Name, targetName)
 
 	logger := log.
 		WithField("kind", r.Kind).
@@ -143,7 +150,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	}
 
-	targetCopy.Name = source.Name
+	targetCopy.Name = targetName
 	targetCopy.Labels = labelsCopy
 	targetCopy.ImagePullSecrets = source.ImagePullSecrets
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
@@ -153,21 +160,21 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	if exists {
 		if err == nil {
-			logger.Debugf("Updating existing serviceAccount %s/%s", target.Name, targetCopy.Name)
+			logger.Debugf("Updating existing serviceAccount %s/%s", target.Name, targetName)
 			obj, err = r.Client.CoreV1().ServiceAccounts(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
 	} else {
 		if err == nil {
-			logger.Debugf("Creating a new serviceAccount %s/%s", target.Name, targetCopy.Name)
+			logger.Debugf("Creating a new serviceAccount %s/%s", target.Name, targetName)
 			obj, err = r.Client.CoreV1().ServiceAccounts(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 		}
 	}
 	if err != nil {
-		return errors.Wrapf(err, "Failed to update serviceAccount %s/%s", target.Name, targetCopy.Name)
+		return errors.Wrapf(err, "Failed to update serviceAccount %s/%s", target.Name, targetName)
 	}
 
 	if err := r.Store.Update(obj); err != nil {
-		return errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, targetCopy)
+		return errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, targetName)
 	}
 
 	return nil
