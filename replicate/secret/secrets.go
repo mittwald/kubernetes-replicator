@@ -136,7 +136,14 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 // ReplicateObjectTo copies the whole object to target namespace
 func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespace) error {
 	source := sourceObj.(*v1.Secret)
-	targetLocation := fmt.Sprintf("%s/%s", target.Name, source.Name)
+
+	// Extract prefix and suffix annotations
+	prefix := source.Annotations[common.PrefixAnnotation]
+	suffix := source.Annotations[common.SuffixAnnotation]
+
+	// Generate target name using prefix and suffix
+	targetName := common.GenerateTargetName(source.Name, prefix, suffix)
+	targetLocation := fmt.Sprintf("%s/%s", target.Name, targetName)
 
 	logger := log.
 		WithField("kind", r.Kind).
@@ -194,7 +201,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		}
 	}
 
-	resourceCopy.Name = source.Name
+	resourceCopy.Name = targetName
 	resourceCopy.Labels = labelsCopy
 	resourceCopy.Type = targetResourceType
 	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
@@ -203,16 +210,16 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	var obj interface{}
 	if exists {
-		logger.Debugf("Updating existing secret %s/%s", target.Name, resourceCopy.Name)
+		logger.Debugf("Updating existing secret %s/%s", target.Name, targetName)
 		obj, err = r.Client.CoreV1().Secrets(target.Name).Update(context.TODO(), resourceCopy, metav1.UpdateOptions{})
 	} else {
-		logger.Debugf("Creating a new secret secret %s/%s", target.Name, resourceCopy.Name)
+		logger.Debugf("Creating a new secret %s/%s", target.Name, targetName)
 		obj, err = r.Client.CoreV1().Secrets(target.Name).Create(context.TODO(), resourceCopy, metav1.CreateOptions{})
 	}
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to update secret %s/%s", target.Name, resourceCopy.Name)
+		err = errors.Wrapf(err, "Failed to update secret %s/%s", target.Name, targetName)
 	} else if err = r.Store.Update(obj); err != nil {
-		err = errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, resourceCopy)
+		err = errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, targetName)
 	}
 
 	return err

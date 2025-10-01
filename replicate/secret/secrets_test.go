@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
@@ -1394,6 +1395,145 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 		require.Equal(t, []byte("Hello World"), updTarget.Data["foo"])
 
 		close(stop)
+	})
+
+	t.Run("replicates with prefix annotation", func(t *testing.T) {
+		targetNamespace := prefix + "test2"
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source-prefix",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo:      targetNamespace,
+					common.PrefixAnnotation: "prod",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"foo": []byte("Hello World"),
+			},
+		}
+
+		expectedTargetName := "prod-source-prefix"
+
+		wg, stop := waitForSecrets(client, 2, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj any) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == source.Namespace && secret.Name == source.Name {
+					log.Debugf("AddFunc source %+v", obj)
+					wg.Done()
+				} else if secret.Namespace == targetNamespace && secret.Name == expectedTargetName {
+					log.Debugf("AddFunc target %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		// Verify the target secret was created with the correct name
+		targetSecrets := client.CoreV1().Secrets(targetNamespace)
+		target, err := targetSecrets.Get(context.TODO(), expectedTargetName, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, expectedTargetName, target.Name)
+		require.Equal(t, []byte("Hello World"), target.Data["foo"])
+	})
+
+	t.Run("replicates with suffix annotation", func(t *testing.T) {
+		targetNamespace := prefix + "test2"
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source-suffix",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo:      targetNamespace,
+					common.SuffixAnnotation: "backup",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"foo": []byte("Hello World"),
+			},
+		}
+
+		expectedTargetName := "source-suffix-backup"
+
+		wg, stop := waitForSecrets(client, 2, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj any) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == source.Namespace && secret.Name == source.Name {
+					log.Debugf("AddFunc source %+v", obj)
+					wg.Done()
+				} else if secret.Namespace == targetNamespace && secret.Name == expectedTargetName {
+					log.Debugf("AddFunc target %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		// Verify the target secret was created with the correct name
+		targetSecrets := client.CoreV1().Secrets(targetNamespace)
+		target, err := targetSecrets.Get(context.TODO(), expectedTargetName, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, expectedTargetName, target.Name)
+		require.Equal(t, []byte("Hello World"), target.Data["foo"])
+	})
+
+	t.Run("replicates with both prefix and suffix annotations", func(t *testing.T) {
+		targetNamespace := prefix + "test2"
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "source-both",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo:      targetNamespace,
+					common.PrefixAnnotation: "prod",
+					common.SuffixAnnotation: "v1",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"foo": []byte("Hello World"),
+			},
+		}
+
+		expectedTargetName := "prod-source-both-v1"
+
+		wg, stop := waitForSecrets(client, 2, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj any) {
+				secret := obj.(*corev1.Secret)
+				if secret.Namespace == source.Namespace && secret.Name == source.Name {
+					log.Debugf("AddFunc source %+v", obj)
+					wg.Done()
+				} else if secret.Namespace == targetNamespace && secret.Name == expectedTargetName {
+					log.Debugf("AddFunc target %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err := secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		// Verify the target secret was created with the correct name
+		targetSecrets := client.CoreV1().Secrets(targetNamespace)
+		target, err := targetSecrets.Get(context.TODO(), expectedTargetName, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, expectedTargetName, target.Name)
+		require.Equal(t, []byte("Hello World"), target.Data["foo"])
 	})
 
 }
