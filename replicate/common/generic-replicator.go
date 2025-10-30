@@ -348,9 +348,7 @@ func (r *GenericReplicator) resourceAddedReplicateFrom(sourceLocation string, ta
 
 	r.DependencyMap[sourceLocation][cacheKey] = nil
 
-	if _, ok := r.DependentMap[cacheKey]; !ok {
-		r.DependentMap[cacheKey] = sourceLocation
-	}
+	r.DependentMap[cacheKey] = sourceLocation
 
 	sourceObject, exists, err := r.Store.GetByKey(sourceLocation)
 	if err != nil {

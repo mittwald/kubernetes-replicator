@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
@@ -1281,6 +1282,130 @@ func TestSecretReplicator(t *testing.T) {
 		require.Equal(t, []byte("{}"), updTarget.Data[".dockercfg"])
 		require.Equal(t, corev1.SecretTypeDockercfg, updTarget.Type)
 
+	})
+
+	t.Run("target switches to replicate from a different secret with same name", func(t *testing.T) {
+		secret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "switchable-source",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicationAllowed:           "true",
+					common.ReplicationAllowedNamespaces: ns.Name + "," + ns2.Name,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"value": []byte("original-secret-value"),
+			},
+		}
+
+		target := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "switchable-target",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateFromAnnotation: common.MustGetKey(&secret),
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+
+		wg, stop := waitForSecrets(client, 3, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj any) {
+				s := obj.(*corev1.Secret)
+				if s.Namespace == secret.Namespace && s.Name == secret.Name {
+					log.Debugf("AddFunc secret %+v", obj)
+					wg.Done()
+				} else if s.Namespace == target.Namespace && s.Name == target.Name {
+					log.Debugf("AddFunc target %+v", obj)
+					wg.Done()
+				}
+			},
+			UpdateFunc: func(wg *sync.WaitGroup, oldObj, newObj any) {
+				s := oldObj.(*corev1.Secret)
+				if s.Namespace == target.Namespace && s.Name == target.Name {
+					log.Debugf("UpdateFunc target %+v -> %+v", oldObj, newObj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err := secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		_, err = secrets.Create(context.TODO(), &target, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		updTarget, err := secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("original-secret-value"), updTarget.Data["value"])
+
+		// Create newsecret with same name but in different namespace (ns2)
+		newsecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "switchable-source",
+				Namespace: ns2.Name,
+				Annotations: map[string]string{
+					common.ReplicationAllowed:           "true",
+					common.ReplicationAllowedNamespaces: ns.Name + "," + ns2.Name,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"value": []byte("new-secret-value"),
+			},
+		}
+
+		secrets2 := client.CoreV1().Secrets(prefix + "test2")
+
+		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
+			AddFunc: func(wg *sync.WaitGroup, obj any) {
+				s := obj.(*corev1.Secret)
+				if s.Namespace == newsecret.Namespace && s.Name == newsecret.Name {
+					log.Debugf("AddFunc newsecret %+v", obj)
+					wg.Done()
+				}
+			},
+		})
+
+		_, err = secrets2.Create(context.TODO(), &newsecret, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		createdNewSecret, err := secrets2.Get(context.TODO(), newsecret.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("new-secret-value"), createdNewSecret.Data["value"])
+
+		wg, stop = waitForSecrets(client, 1, EventHandlerFuncs{
+			UpdateFunc: func(wg *sync.WaitGroup, oldObj, newObj any) {
+				s := oldObj.(*corev1.Secret)
+				if s.Namespace == target.Namespace && s.Name == target.Name {
+					log.Debugf("UpdateFunc target after switch %+v -> %+v", oldObj, newObj)
+					wg.Done()
+				}
+			},
+		})
+
+		// Update target's annotation to point to newsecret
+		patchData := fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
+			common.ReplicateFromAnnotation,
+			common.MustGetKey(&newsecret))
+		_, err = secrets.Patch(context.TODO(), target.Name, types.MergePatchType,
+			[]byte(patchData), metav1.PatchOptions{})
+		require.NoError(t, err)
+
+		waitWithTimeout(wg, MaxWaitTime)
+		close(stop)
+
+		updTarget, err = secrets.Get(context.TODO(), target.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("new-secret-value"), updTarget.Data["value"])
 	})
 
 }
