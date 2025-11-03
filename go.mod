@@ -1,6 +1,6 @@
 module github.com/mittwald/kubernetes-replicator
 
-go 1.24.0
+go 1.24.9
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
