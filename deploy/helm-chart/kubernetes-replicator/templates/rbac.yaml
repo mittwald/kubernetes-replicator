@@ -3,6 +3,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "kubernetes-replicator.serviceAccountName" . }}
+  namespace: {{ include "kubernetes-replicator.namespace" . }}
   labels:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
   {{- with .Values.serviceAccount.annotations }}
@@ -71,5 +72,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "kubernetes-replicator.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace | quote }}
+    namespace: {{ include "kubernetes-replicator.namespace" . }}
 {{- end -}}

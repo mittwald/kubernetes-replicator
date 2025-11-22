@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "kubernetes-replicator.fullname" . }}
+  namespace: {{ include "kubernetes-replicator.namespace" . }}
   labels:
     {{- include "kubernetes-replicator.labels" . | nindent 4 }}
     {{- if .Values.labels }}
