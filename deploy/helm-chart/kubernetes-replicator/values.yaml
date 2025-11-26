@@ -86,6 +86,9 @@ affinity: {}
 # Deployment annotations
 annotations: {}
 
+# Common labels, applied to all ressources
+commonLabels: {}
+
 # Deployment labels
 labels: {}
 
