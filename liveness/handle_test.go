@@ -21,7 +21,7 @@ func (r *MockReplicator) Synced() bool {
 	return r.synced
 }
 
-//noinspection GoUnusedParameter
+// noinspection GoUnusedParameter
 func (r *MockReplicator) NamespaceAdded(ns *v1.Namespace) {
 	// Do nothing
 }
