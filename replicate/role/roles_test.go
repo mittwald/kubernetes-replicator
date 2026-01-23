@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
@@ -78,8 +79,9 @@ func TestRoleReplicator(t *testing.T) {
 
 	prefix := namespacePrefix()
 	client := kubernetes.NewForConfigOrDie(config)
+	annotationsFilter := common.NewAnnotationsFilter([]string{})
 
-	repl := NewReplicator(client, 60*time.Second, false)
+	repl := NewReplicator(client, 60*time.Second, false, annotationsFilter)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)

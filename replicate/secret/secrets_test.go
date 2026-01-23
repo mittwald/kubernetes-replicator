@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/mittwald/kubernetes-replicator/replicate/common"
 	pkgerrors "github.com/pkg/errors"
@@ -83,8 +84,9 @@ func TestSecretReplicator(t *testing.T) {
 
 	client := setupRealClientSet(t)
 	filter := common.NewNamespaceFilter([]string{})
+	annotationsFilter := common.NewAnnotationsFilter([]string{})
 
-	repl := NewReplicator(client, 60*time.Second, false, false, filter)
+	repl := NewReplicator(client, 60*time.Second, false, false, filter, annotationsFilter)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
@@ -1295,8 +1297,9 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 	ctx := context.TODO()
 
 	filter := common.NewNamespaceFilter([]string{})
+	annotationsFilter := common.NewAnnotationsFilter([]string{})
 
-	repl := NewReplicator(client, 60*time.Second, false, true, filter)
+	repl := NewReplicator(client, 60*time.Second, false, true, filter, annotationsFilter)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)

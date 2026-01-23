@@ -23,15 +23,16 @@ import (
 )
 
 type ReplicatorConfig struct {
-	Kind            string
-	Client          kubernetes.Interface
-	ResyncPeriod    time.Duration
-	AllowAll        bool
-	SyncByContent   bool
-	ListFunc        cache.ListFunc
-	WatchFunc       cache.WatchFunc
-	ObjType         runtime.Object
-	NamespaceFilter *NamespaceFilter
+	Kind              string
+	Client            kubernetes.Interface
+	ResyncPeriod      time.Duration
+	AllowAll          bool
+	SyncByContent     bool
+	ListFunc          cache.ListFunc
+	WatchFunc         cache.WatchFunc
+	ObjType           runtime.Object
+	NamespaceFilter   *NamespaceFilter
+	AnnotationsFilter *AnnotationsFilter
 }
 
 type UpdateFuncs struct {
@@ -90,6 +91,7 @@ func NewGenericReplicator(config ReplicatorConfig) *GenericReplicator {
 	repl.Controller = controller
 
 	repl.NamespaceFilter = config.NamespaceFilter
+	repl.AnnotationsFilter = config.AnnotationsFilter
 
 	return &repl
 }
@@ -428,6 +430,18 @@ func (r *GenericReplicator) getNamespacesToReplicate(myNs string, patterns strin
 // Namespaces it was successful in replicating into
 func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targets []v1.Namespace) (replicatedTo []v1.Namespace, err error) {
 	cacheKey := MustGetKey(obj)
+
+	metaObj, ok := obj.(metav1.Object)
+	if !ok {
+		return nil, fmt.Errorf("object does not implement metav1.Object interface")
+	}
+
+	if r.AnnotationsFilter != nil && r.AnnotationsFilter.ShouldExclude(metaObj.GetAnnotations()) {
+		log.WithFields(log.Fields{
+			"kind": r.Kind,
+		}).Info("Skipping object due to excluded annotation")
+		return
+	}
 
 	for _, namespace := range targets {
 		if r.NamespaceFilter != nil && r.NamespaceFilter.ShouldExclude(namespace.Name) {

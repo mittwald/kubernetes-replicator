@@ -38,6 +38,7 @@ func init() {
 	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.BoolVar(&f.SyncByContent, "sync-by-content", false, "Always compare the contents of source and target resources and force them to be the same")
 	flag.StringVar(&f.ExcludeNamespaces, "exclude-namespaces", "", "Comma-separated list of regex patterns for namespaces to exclude from replication")
+	flag.StringVar(&f.ExcludeAnnotations, "exclude-annotations", "", "Comma-separated list of regex patterns for annotations of resource to exclude from replication")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -92,32 +93,35 @@ func main() {
 	excludePatterns := strings.Split(f.ExcludeNamespaces, ",")
 	filter := common.NewNamespaceFilter(excludePatterns)
 
+	excludeAnnotationsPatterns := strings.Split(f.ExcludeAnnotations, ",")
+	annotationsFilter := common.NewAnnotationsFilter(excludeAnnotationsPatterns)
+
 	if f.ReplicateSecrets {
-		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter, annotationsFilter)
 		go secretRepl.Run()
 		enabledReplicators = append(enabledReplicators, secretRepl)
 	}
 
 	if f.ReplicateConfigMaps {
-		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter, annotationsFilter)
 		go configMapRepl.Run()
 		enabledReplicators = append(enabledReplicators, configMapRepl)
 	}
 
 	if f.ReplicateRoles {
-		roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		roleRepl := role.NewReplicator(client, f.ResyncPeriod, f.AllowAll, annotationsFilter)
 		go roleRepl.Run()
 		enabledReplicators = append(enabledReplicators, roleRepl)
 	}
 
 	if f.ReplicateRoleBindings {
-		roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		roleBindingRepl := rolebinding.NewReplicator(client, f.ResyncPeriod, f.AllowAll, annotationsFilter)
 		go roleBindingRepl.Run()
 		enabledReplicators = append(enabledReplicators, roleBindingRepl)
 	}
 
 	if f.ReplicateServiceAccounts {
-		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll)
+		serviceAccountRepl := serviceaccount.NewReplicator(client, f.ResyncPeriod, f.AllowAll, annotationsFilter)
 		go serviceAccountRepl.Run()
 		enabledReplicators = append(enabledReplicators, serviceAccountRepl)
 	}

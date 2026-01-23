@@ -26,7 +26,7 @@ type Replicator struct {
 const sleepTime = 100 * time.Millisecond
 
 // NewReplicator creates a new secret replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool, annotationsFilter *common.AnnotationsFilter) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "RoleBinding",
@@ -40,6 +40,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.RbacV1().RoleBindings("").Watch(context.TODO(), lo)
 			},
+			AnnotationsFilter: annotationsFilter,
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -178,7 +179,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	return nil
 }
 
-//Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
+// Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
 func (r *Replicator) canReplicate(targetNameSpace string, roleRef string) (err error) {
 	for i := 0; i < 5; i++ {
 		_, err = r.Client.RbacV1().Roles(targetNameSpace).Get(context.TODO(), roleRef, metav1.GetOptions{})

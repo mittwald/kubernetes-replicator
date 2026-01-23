@@ -17,4 +17,5 @@ type flags struct {
 	ReplicateServiceAccounts bool
 	SyncByContent            bool
 	ExcludeNamespaces        string
+	ExcludeAnnotations       string
 }
