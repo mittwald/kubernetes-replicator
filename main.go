@@ -95,16 +95,16 @@ func main() {
 	client = kubernetes.NewForConfigOrDie(config)
 
 	excludePatterns := strings.Split(f.ExcludeNamespaces, ",")
-	namespaceFilter := common.NewNamespaceFilter(excludePatterns)
+	filter := common.NewNamespaceFilter(excludePatterns)
 
 	if f.ReplicateSecrets {
-		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, namespaceFilter)
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
 		go secretRepl.Run()
 		enabledReplicators = append(enabledReplicators, secretRepl)
 	}
 
 	if f.ReplicateConfigMaps {
-		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, namespaceFilter)
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
 		go configMapRepl.Run()
 		enabledReplicators = append(enabledReplicators, configMapRepl)
 	}
