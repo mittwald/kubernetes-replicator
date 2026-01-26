@@ -38,6 +38,7 @@ func init() {
 	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.BoolVar(&f.SyncByContent, "sync-by-content", false, "Always compare the contents of source and target resources and force them to be the same")
 	flag.StringVar(&f.ExcludeNamespaces, "exclude-namespaces", "", "Comma-separated list of regex patterns for namespaces to exclude from replication")
+	flag.StringVar(&f.ComponentsSyncPeriodS, "components-sync-period", "30s", "components sync period")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {

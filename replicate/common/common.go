@@ -1,15 +1,17 @@
 package common
 
 import (
+	"strings"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 type Replicator interface {
 	Run()
 	Synced() bool
 	NamespaceAdded(ns *v1.Namespace)
+	GetKind() string
 }
 
 func PreviouslyPresentKeys(object *metav1.ObjectMeta) (map[string]struct{}, bool) {
