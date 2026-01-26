@@ -38,6 +38,7 @@ func init() {
 	flag.BoolVar(&f.ReplicateServiceAccounts, "replicate-service-accounts", true, "Enable replication of service accounts")
 	flag.BoolVar(&f.SyncByContent, "sync-by-content", false, "Always compare the contents of source and target resources and force them to be the same")
 	flag.StringVar(&f.ExcludeNamespaces, "exclude-namespaces", "", "Comma-separated list of regex patterns for namespaces to exclude from replication")
+	flag.StringVar(&f.ComponentsSyncPeriodS, "components-sync-period", "30s", "components sync period")
 	flag.Parse()
 
 	switch strings.ToUpper(strings.TrimSpace(f.LogLevel)) {
@@ -61,6 +62,10 @@ func init() {
 	}
 
 	f.ResyncPeriod, err = time.ParseDuration(f.ResyncPeriodS)
+	if err != nil {
+		panic(err)
+	}
+	f.ComponentsSyncPeriod, err = time.ParseDuration(f.ComponentsSyncPeriodS)
 	if err != nil {
 		panic(err)
 	}
@@ -124,7 +129,9 @@ func main() {
 
 	h := liveness.Handler{
 		Replicators: enabledReplicators,
+		SyncPeriod:  f.ComponentsSyncPeriod,
 	}
+	go h.RunSyncLoop()
 
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)
 
