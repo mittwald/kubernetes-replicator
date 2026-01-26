@@ -65,6 +65,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	f.ComponentsSyncPeriod, err = time.ParseDuration(f.ComponentsSyncPeriodS)
+	if err != nil {
+		panic(err)
+	}
 
 	log.Debugf("using flag values %#v", f)
 }
@@ -91,16 +95,16 @@ func main() {
 	client = kubernetes.NewForConfigOrDie(config)
 
 	excludePatterns := strings.Split(f.ExcludeNamespaces, ",")
-	filter := common.NewNamespaceFilter(excludePatterns)
+	namespaceFilter := common.NewNamespaceFilter(excludePatterns)
 
 	if f.ReplicateSecrets {
-		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
+		secretRepl := secret.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, namespaceFilter)
 		go secretRepl.Run()
 		enabledReplicators = append(enabledReplicators, secretRepl)
 	}
 
 	if f.ReplicateConfigMaps {
-		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, filter)
+		configMapRepl := configmap.NewReplicator(client, f.ResyncPeriod, f.AllowAll, f.SyncByContent, namespaceFilter)
 		go configMapRepl.Run()
 		enabledReplicators = append(enabledReplicators, configMapRepl)
 	}
@@ -125,7 +129,9 @@ func main() {
 
 	h := liveness.Handler{
 		Replicators: enabledReplicators,
+		SyncPeriod:  f.ComponentsSyncPeriod,
 	}
+	go h.RunSyncLoop()
 
 	log.Infof("starting liveness monitor at %s", f.StatusAddr)
 
