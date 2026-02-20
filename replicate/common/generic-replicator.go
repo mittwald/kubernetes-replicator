@@ -153,6 +153,10 @@ func (r *GenericReplicator) Run() {
 	r.Controller.Run(wait.NeverStop)
 }
 
+func (r *GenericReplicator) GetKind() string {
+	return r.Kind
+}
+
 // NamespaceAdded replicates resources with ReplicateTo and ReplicateToMatching
 // annotations into newly created namespaces.
 func (r *GenericReplicator) NamespaceAdded(ns *v1.Namespace) {

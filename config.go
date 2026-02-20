@@ -17,4 +17,6 @@ type flags struct {
 	ReplicateServiceAccounts bool
 	SyncByContent            bool
 	ExcludeNamespaces        string
+	ComponentsSyncPeriodS    string
+	ComponentsSyncPeriod     time.Duration
 }
