@@ -388,15 +388,25 @@ func (r *GenericReplicator) replicateResourceToMatchingNamespaces(obj interface{
 
 func (r *GenericReplicator) replicateResourceToMatchingNamespacesByLabel(ctx context.Context, obj interface{}, selector labels.Selector) error {
 	cacheKey := MustGetKey(obj)
+	myNs := MustGetObject(obj).GetNamespace()
 
 	namespaces, err := r.Client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
 	if err != nil {
 		return errors.Wrap(err, "error while listing namespaces by selector")
 	}
 
-	if replicated, err := r.replicateResourceToNamespaces(obj, namespaces.Items); err != nil {
+	replicateTo := make([]v1.Namespace, 0, len(namespaces.Items))
+	for _, namespace := range namespaces.Items {
+		if namespace.Name == myNs {
+			// Don't replicate upon itself
+			continue
+		}
+		replicateTo = append(replicateTo, namespace)
+	}
+
+	if replicated, err := r.replicateResourceToNamespaces(obj, replicateTo); err != nil {
 		return errors.Wrapf(err, "Replicated %s to %d out of %d namespaces",
-			cacheKey, len(replicated), len(namespaces.Items),
+			cacheKey, len(replicated), len(replicateTo),
 		)
 	}
 
