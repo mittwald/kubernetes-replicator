@@ -75,6 +75,10 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	targetCopy := target.DeepCopy()
 	targetCopy.ImagePullSecrets = source.ImagePullSecrets
 
+	if targetCopy.Annotations == nil {
+		targetCopy.Annotations = make(map[string]string)
+	}
+
 	log.Infof("updating target %s/%s", target.Namespace, target.Name)
 
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
