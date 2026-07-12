@@ -31,7 +31,7 @@ func (h *Handler) notReadyComponents() []string {
 	return notReady
 }
 
-//noinspection GoUnusedParameter
+// noinspection GoUnusedParameter
 func (h *Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/healthz" {
 		res.WriteHeader(http.StatusOK)
