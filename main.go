@@ -13,6 +13,7 @@ import (
 	"github.com/mittwald/kubernetes-replicator/replicate/secret"
 	"github.com/mittwald/kubernetes-replicator/replicate/serviceaccount"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/mittwald/kubernetes-replicator/liveness"
@@ -126,10 +127,11 @@ func main() {
 		Replicators: enabledReplicators,
 	}
 
-	log.Infof("starting liveness monitor at %s", f.StatusAddr)
+	log.Infof("serving /healthz, /readyz, and /metrics at %s", f.StatusAddr)
 
 	http.Handle("/healthz", &h)
 	http.Handle("/readyz", &h)
+	http.Handle("/metrics", promhttp.Handler())
 	err = http.ListenAndServe(f.StatusAddr, nil)
 	if err != nil {
 		log.Fatal(err)
