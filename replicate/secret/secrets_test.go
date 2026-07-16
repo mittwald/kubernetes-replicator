@@ -971,6 +971,98 @@ func TestSecretReplicator(t *testing.T) {
 		require.Equal(t, []byte("Hello Bar"), updTarget.Data["bar"])
 	})
 
+	t.Run("does not replicate a secret onto its own namespace (replicate-to-matching self-match)", func(t *testing.T) {
+		// When a replicate-to-matching selector also matches the source secret's
+		// own namespace, the secret must NOT be replicated onto itself. Doing so
+		// updates the source object, which re-triggers the informer and produces
+		// an infinite reconciliation loop.
+		selfNsName := prefix + "test-self-match"
+		selfNs := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   selfNsName,
+				Labels: map[string]string{"self-match": "yes"},
+			},
+		}
+		_, err := client.CoreV1().Namespaces().Create(context.TODO(), &selfNs, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer func() {
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), selfNsName, metav1.DeleteOptions{})
+		}()
+
+		selfSecrets := client.CoreV1().Secrets(selfNsName)
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "self-source",
+				Namespace: selfNsName,
+				Annotations: map[string]string{
+					// Selector matches this secret's OWN namespace label.
+					common.ReplicateToMatching: "self-match=yes",
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"foo": []byte("Hello Foo")},
+		}
+		created, err := selfSecrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		// Allow the replicator time to (pre-fix, incorrectly) act on the source.
+		time.Sleep(2 * time.Second)
+
+		after, err := selfSecrets.Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		// The replicated-from-version annotation is only ever stamped on a
+		// replication *target*; the source must never carry it.
+		require.NotContains(t, after.Annotations, common.ReplicatedFromVersionAnnotation,
+			"source secret was replicated onto itself (self-replication loop)")
+
+		// Without a self-write the source's resourceVersion stays stable.
+		require.Equal(t, created.ResourceVersion, after.ResourceVersion,
+			"source secret resourceVersion changed, indicating a self-replication loop")
+	})
+
+	t.Run("does not replicate a secret onto its own namespace (replicate-to pattern self-match)", func(t *testing.T) {
+		// Same self-replication guard as above, but for the replicate-to
+		// (namespace pattern) strategy: a pattern that matches the source's own
+		// namespace must NOT cause the secret to be replicated onto itself.
+		selfNsName := prefix + "test-self-pattern"
+		selfNs := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: selfNsName},
+		}
+		_, err := client.CoreV1().Namespaces().Create(context.TODO(), &selfNs, metav1.CreateOptions{})
+		require.NoError(t, err)
+		defer func() {
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), selfNsName, metav1.DeleteOptions{})
+		}()
+
+		selfSecrets := client.CoreV1().Secrets(selfNsName)
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "self-source",
+				Namespace: selfNsName,
+				Annotations: map[string]string{
+					// Pattern matches this secret's OWN namespace.
+					common.ReplicateTo: selfNsName,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"foo": []byte("Hello Foo")},
+		}
+		created, err := selfSecrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		// Allow the replicator time to act on the source.
+		time.Sleep(2 * time.Second)
+
+		after, err := selfSecrets.Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		require.NotContains(t, after.Annotations, common.ReplicatedFromVersionAnnotation,
+			"source secret was replicated onto itself (self-replication loop)")
+		require.Equal(t, created.ResourceVersion, after.ResourceVersion,
+			"source secret resourceVersion changed, indicating a self-replication loop")
+	})
+
 	t.Run("secrets are replicated when new namespace is created with label", func(t *testing.T) {
 		namespaceName := prefix + "test-repl-new-ns-label"
 		source := corev1.Secret{
