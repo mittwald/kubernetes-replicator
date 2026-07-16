@@ -41,3 +41,33 @@ jobs:
         env:
           GITHUB_TOKEN: "${{ secrets.RELEASE_USER_TOKEN }}"
           HELM_REPO_PASSWORD: "${{ secrets.HELM_REPO_PASSWORD }}"
+
+  publish-helm-chart:
+    name: Publish Helm chart to GHCR
+    runs-on: ubuntu-latest
+    needs: bump-version
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'latest'
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Package Helm chart
+        run: |
+          helm package deploy/helm-chart/kubernetes-replicator
+
+      - name: Push Helm chart to GHCR
+        run: |
+          CHART_VERSION=$(helm show chart deploy/helm-chart/kubernetes-replicator | grep '^version:' | awk '{print $2}')
+          helm push kubernetes-replicator-${CHART_VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
