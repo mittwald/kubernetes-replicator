@@ -95,7 +95,14 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 // ReplicateObjectTo copies the whole object to target namespace
 func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespace) error {
 	source := sourceObj.(*rbacv1.RoleBinding)
-	targetLocation := fmt.Sprintf("%s/%s", target.Name, source.Name)
+
+	// Extract prefix and suffix annotations
+	prefix := source.Annotations[common.PrefixAnnotation]
+	suffix := source.Annotations[common.SuffixAnnotation]
+
+	// Generate target name using prefix and suffix
+	targetName := common.GenerateTargetName(source.Name, prefix, suffix)
+	targetLocation := fmt.Sprintf("%s/%s", target.Name, targetName)
 
 	logger := log.
 		WithField("kind", r.Kind).
@@ -145,7 +152,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	}
 
-	targetCopy.Name = source.Name
+	targetCopy.Name = targetName
 	targetCopy.Labels = labelsCopy
 	targetCopy.Subjects = source.Subjects
 	targetCopy.RoleRef = source.RoleRef
@@ -158,27 +165,27 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	}
 	if exists {
 		if err == nil {
-			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetCopy.Name)
+			logger.Debugf("Updating existing roleBinding %s/%s", target.Name, targetName)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Update(context.TODO(), targetCopy, metav1.UpdateOptions{})
 		}
 	} else {
 		if err == nil {
-			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetCopy.Name)
+			logger.Debugf("Creating a new roleBinding %s/%s", target.Name, targetName)
 			obj, err = r.Client.RbacV1().RoleBindings(target.Name).Create(context.TODO(), targetCopy, metav1.CreateOptions{})
 		}
 	}
 	if err != nil {
-		return errors.Wrapf(err, "Failed to update roleBinding %s/%s", target.Name, targetCopy.Name)
+		return errors.Wrapf(err, "Failed to update roleBinding %s/%s", target.Name, targetName)
 	}
 
 	if err := r.Store.Update(obj); err != nil {
-		return errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, targetCopy)
+		return errors.Wrapf(err, "Failed to update cache for %s/%s", target.Name, targetName)
 	}
 
 	return nil
 }
 
-//Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
+// Checks if Role required for RoleBinding exists. Retries a few times before returning error to allow replication to catch up
 func (r *Replicator) canReplicate(targetNameSpace string, roleRef string) (err error) {
 	for i := 0; i < 5; i++ {
 		_, err = r.Client.RbacV1().Roles(targetNameSpace).Get(context.TODO(), roleRef, metav1.GetOptions{})
