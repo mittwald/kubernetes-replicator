@@ -1,11 +1,12 @@
 package liveness
 
 import (
-	"github.com/mittwald/kubernetes-replicator/replicate/common"
-	v1 "k8s.io/api/core/v1"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/mittwald/kubernetes-replicator/replicate/common"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -21,9 +22,13 @@ func (r *MockReplicator) Synced() bool {
 	return r.synced
 }
 
-//noinspection GoUnusedParameter
+// noinspection GoUnusedParameter
 func (r *MockReplicator) NamespaceAdded(ns *v1.Namespace) {
 	// Do nothing
+}
+
+func (r *MockReplicator) GetKind() string {
+	return ""
 }
 
 func buildReqRes(t *testing.T) (*http.Request, *httptest.ResponseRecorder) {
@@ -57,6 +62,7 @@ func TestReturns503IfOneReplicatorIsNotSynced(t *testing.T) {
 			&MockReplicator{synced: true},
 			&MockReplicator{synced: false},
 		},
+		notReady: []string{"replicator2"},
 	}
 
 	handler.ServeHTTP(res, req)
