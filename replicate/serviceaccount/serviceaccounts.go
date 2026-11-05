@@ -24,7 +24,7 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new serviceaccount replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll bool, namespaceFilter *common.NamespaceFilter, pushPolicy *common.PushPolicy) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:         "ServiceAccount",
@@ -38,6 +38,8 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				return client.CoreV1().ServiceAccounts("").Watch(context.TODO(), lo)
 			},
+			NamespaceFilter: namespaceFilter,
+			PushPolicy:      pushPolicy,
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -109,6 +111,10 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var targetCopy *corev1.ServiceAccount
 	if exists {
 		targetObject := targetResource.(*corev1.ServiceAccount)
+		if err := common.CheckPushTarget(common.MustGetKey(source), targetObject); err != nil {
+			return err
+		}
+
 		targetVersion, ok := targetObject.Annotations[common.ReplicatedFromVersionAnnotation]
 		sourceVersion := source.ResourceVersion
 
@@ -124,7 +130,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
 	if ok && keepOwnerReferences == "true" {
-		targetCopy.OwnerReferences = source.OwnerReferences
+		targetCopy.OwnerReferences = r.PushedOwnerReferences(source.OwnerReferences)
 	}
 
 	if targetCopy.Annotations == nil {
@@ -148,6 +154,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	targetCopy.ImagePullSecrets = source.ImagePullSecrets
 	targetCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	targetCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
+	targetCopy.Annotations[common.ReplicatedFromSourceAnnotation] = common.MustGetKey(source)
 
 	var obj interface{}
 
@@ -215,7 +222,7 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	object := targetResource.(*corev1.ServiceAccount)
 	logger.Debugf("Deleting %s", targetLocation)
-	if err := r.Client.CoreV1().ServiceAccounts(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
+	if err := r.Client.CoreV1().ServiceAccounts(object.Namespace).Delete(context.TODO(), object.Name, common.ReplicaDeleteOptions(object)); err != nil {
 		return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 	}
 	return nil

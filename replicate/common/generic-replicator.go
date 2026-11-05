@@ -32,6 +32,12 @@ type ReplicatorConfig struct {
 	WatchFunc       cache.WatchFunc
 	ObjType         runtime.Object
 	NamespaceFilter *NamespaceFilter
+	// PushPolicy decides which namespaces may push objects into other namespaces. A nil policy only permits
+	// pushes into namespaces that accept them through the AllowPushFrom annotation.
+	PushPolicy *PushPolicy
+	// PushRequiresTrustedSource disables the AllowPushFrom namespace annotation for this kind: objects are only
+	// pushed if the source namespace is allowed by the PushPolicy. Used for RBAC objects.
+	PushRequiresTrustedSource bool
 }
 
 type UpdateFuncs struct {
@@ -57,6 +63,9 @@ type GenericReplicator struct {
 	// ReplicateToMatchingList is a set that caches the names of all secrets
 	// that have a "replicate-to-matching" annotation.
 	ReplicateToMatchingList GenericMap[string, labels.Selector]
+
+	// ownerScopes caches whether owner reference kinds ("<apiVersion>/<kind>") are cluster-scoped.
+	ownerScopes GenericMap[string, bool]
 }
 
 // NewGenericReplicator creates a new generic replicator
@@ -123,16 +132,9 @@ func (r *GenericReplicator) IsReplicationPermitted(object *metav1.ObjectMeta, so
 			"source %s/%s does not allow replication (%s annotation missing). %s will not be replicated",
 			sourceObject.Namespace, sourceObject.Name, ReplicationAllowedNamespaces, object.Name)
 	}
-	allowedNamespaces := strings.Split(annotationAllowedNamespaces, ",")
-	allowed := false
-	for _, ns := range allowedNamespaces {
-		ns := BuildStrictRegex(ns)
-
-		if matched, _ := regexp.MatchString(ns, object.Namespace); matched {
-			log.Tracef("Namespace '%s' matches '%s' -- allowing replication", object.Namespace, ns)
-			allowed = true
-			break
-		}
+	allowed := MatchesAnyPattern(StringToPatternList(annotationAllowedNamespaces), object.Namespace)
+	if allowed {
+		log.Tracef("Namespace '%s' matches '%s' -- allowing replication", object.Namespace, annotationAllowedNamespaces)
 	}
 
 	err = nil
@@ -145,7 +147,8 @@ func (r *GenericReplicator) IsReplicationPermitted(object *metav1.ObjectMeta, so
 }
 
 func (r *GenericReplicator) Synced() bool {
-	return r.Controller.HasSynced()
+	return r.Controller.HasSynced() &&
+		namespaceWatcher.NamespaceController != nil && namespaceWatcher.NamespaceController.HasSynced()
 }
 
 func (r *GenericReplicator) Run() {
@@ -218,6 +221,11 @@ func (r *GenericReplicator) NamespaceUpdated(nsOld *v1.Namespace, nsNew *v1.Name
 	// check if labels changed
 	if reflect.DeepEqual(nsNew.Labels, nsOld.Labels) {
 		logger.Debug("labels didn't change")
+		if nsNew.Annotations[AllowPushFrom] != nsOld.Annotations[AllowPushFrom] {
+			// the namespace may accept pushes from other namespaces now
+			logger.Infof("%s annotation of namespace %s changed, attempting to replicate %ss", AllowPushFrom, nsNew.Name, r.Kind)
+			r.NamespaceAdded(nsNew)
+		}
 		return
 	} else {
 		logger.Infof("labels of namespace %s changed, attempting to delete %ss that no longer match", nsNew.Name, r.Kind)
@@ -336,6 +344,12 @@ func (r *GenericReplicator) resourceAddedReplicateFrom(sourceLocation string, ta
 
 	logger := log.WithField("kind", r.Kind).WithField("source", sourceLocation).WithField("target", cacheKey)
 	logger.Debugf("%s %s is replicated from %s", r.Kind, cacheKey, sourceLocation)
+
+	if targetNamespace := MustGetObject(target).GetNamespace(); r.NamespaceFilter.ShouldExclude(targetNamespace) {
+		logger.Infof("not replicating into %s: namespace %s is excluded", cacheKey, targetNamespace)
+		return nil
+	}
+
 	v := strings.SplitN(sourceLocation, "/", 2)
 
 	if len(v) < 2 {
@@ -368,14 +382,33 @@ func (r *GenericReplicator) resourceAddedReplicateFrom(sourceLocation string, ta
 	return nil
 }
 
-// resourceAddedReplicateFrom replicates resources with ReplicateTo annotation
+// replicateResourceToMatchingNamespaces replicates resources with ReplicateTo annotation
 func (r *GenericReplicator) replicateResourceToMatchingNamespaces(obj interface{}, nsPatternList string, namespaceList []v1.Namespace) error {
 	cacheKey := MustGetKey(obj)
 	logger := log.WithField("kind", r.Kind).WithField("source", cacheKey)
+	sourceNamespace := MustGetObject(obj).GetNamespace()
 
-	logger.Infof("%s %s to be replicated to: [%s]", r.Kind, cacheKey, nsPatternList)
+	logger.Infof("%s %s to be replicated to: [%s]", r.Kind, cacheKey, truncate(nsPatternList, 256))
 
-	replicateTo := r.getNamespacesToReplicate(MustGetObject(obj).GetNamespace(), nsPatternList, namespaceList)
+	// Only namespaces that the source namespace may push into are considered. This also avoids compiling the
+	// (user supplied) patterns at all if pushing from the source namespace is not permitted anywhere.
+	candidates := r.pushTargets(sourceNamespace, namespaceList)
+	if len(candidates) == 0 {
+		logger.Infof("not replicating %s: pushing from namespace %s is not permitted into any of the %d candidate namespace(s); see the %s namespace annotation and the -push-allowed-source-namespaces flag",
+			cacheKey, sourceNamespace, len(namespaceList), AllowPushFrom)
+		return nil
+	}
+
+	patterns, err := ParseNamespacePatternList(nsPatternList)
+	if err != nil {
+		logger.WithError(err).Errorf("invalid %s annotation", ReplicateTo)
+	}
+
+	replicateTo := r.getNamespacesToReplicate(sourceNamespace, patterns, candidates)
+	if skipped := len(r.getNamespacesToReplicate(sourceNamespace, patterns, namespaceList)) - len(replicateTo); skipped > 0 {
+		logger.Warnf("not replicating %s into %d matching namespace(s): namespace excluded or pushing from namespace %s not permitted",
+			cacheKey, skipped, sourceNamespace)
+	}
 
 	if replicated, err := r.replicateResourceToNamespaces(obj, replicateTo); err != nil {
 		return errors.Wrapf(err, "Replicated %s to %d out of %d namespaces",
@@ -395,13 +428,20 @@ func (r *GenericReplicator) replicateResourceToMatchingNamespacesByLabel(ctx con
 		return errors.Wrap(err, "error while listing namespaces by selector")
 	}
 
-	replicateTo := make([]v1.Namespace, 0, len(namespaces.Items))
+	matching := make([]v1.Namespace, 0, len(namespaces.Items))
 	for _, namespace := range namespaces.Items {
 		if namespace.Name == myNs {
 			// Don't replicate upon itself
 			continue
 		}
-		replicateTo = append(replicateTo, namespace)
+		matching = append(matching, namespace)
+	}
+
+	replicateTo := r.pushTargets(myNs, matching)
+	if skipped := len(matching) - len(replicateTo); skipped > 0 {
+		log.WithField("kind", r.Kind).WithField("source", cacheKey).
+			Warnf("not replicating %s into %d matching namespace(s): namespace excluded or pushing from namespace %s not permitted",
+				cacheKey, skipped, myNs)
 	}
 
 	if replicated, err := r.replicateResourceToNamespaces(obj, replicateTo); err != nil {
@@ -413,22 +453,18 @@ func (r *GenericReplicator) replicateResourceToMatchingNamespacesByLabel(ctx con
 	return nil
 }
 
-// getNamespacesToReplicate will check the provided filters and create a list of namespace into with to replicate the
-// given object.
-func (r *GenericReplicator) getNamespacesToReplicate(myNs string, patterns string, namespaces []v1.Namespace) []v1.Namespace {
+// getNamespacesToReplicate will check the provided (already compiled) patterns and create a list of namespace into
+// with to replicate the given object.
+func (r *GenericReplicator) getNamespacesToReplicate(myNs string, patterns []*regexp.Regexp, namespaces []v1.Namespace) []v1.Namespace {
 
 	replicateTo := make([]v1.Namespace, 0)
 	for _, namespace := range namespaces {
-		for _, ns := range StringToPatternList(patterns) {
-			if matched := ns.MatchString(namespace.Name); matched {
-				if namespace.Name == myNs {
-					// Don't replicate upon itself
-					continue
-				}
-				replicateTo = append(replicateTo, namespace)
-				break
-
-			}
+		if namespace.Name == myNs {
+			// Don't replicate upon itself
+			continue
+		}
+		if MatchesAnyPattern(patterns, namespace.Name) {
+			replicateTo = append(replicateTo, namespace)
 		}
 	}
 	return replicateTo
@@ -438,13 +474,27 @@ func (r *GenericReplicator) getNamespacesToReplicate(myNs string, patterns strin
 // Namespaces it was successful in replicating into
 func (r *GenericReplicator) replicateResourceToNamespaces(obj interface{}, targets []v1.Namespace) (replicatedTo []v1.Namespace, err error) {
 	cacheKey := MustGetKey(obj)
+	sourceNamespace := MustGetObject(obj).GetNamespace()
 
 	for _, namespace := range targets {
-		if r.NamespaceFilter != nil && r.NamespaceFilter.ShouldExclude(namespace.Name) {
+		if namespace.Name == sourceNamespace {
+			// Don't replicate upon itself
+			continue
+		}
+
+		if r.NamespaceFilter.ShouldExclude(namespace.Name) {
 			log.WithFields(log.Fields{
 				"kind":      r.Kind,
 				"namespace": namespace.Name,
 			}).Info("Skipping excluded namespace")
+			continue
+		}
+
+		if permErr := r.IsPushPermitted(sourceNamespace, &namespace); permErr != nil {
+			log.WithFields(log.Fields{
+				"kind":   r.Kind,
+				"source": cacheKey,
+			}).WithError(permErr).Warnf("Not replicating %s to %s: push replication is not permitted", cacheKey, namespace.Name)
 			continue
 		}
 
@@ -467,6 +517,11 @@ func (r *GenericReplicator) updateDependents(obj interface{}, dependents map[str
 	logger := log.WithField("kind", r.Kind).WithField("source", cacheKey)
 
 	for dependentKey := range dependents {
+		if r.isExcludedKey(dependentKey) {
+			logger.Debugf("not updating dependent %s %s: namespace is excluded", r.Kind, dependentKey)
+			continue
+		}
+
 		logger.Infof("updating dependent %s %s -> %s", r.Kind, cacheKey, dependentKey)
 
 		targetObject, exists, err := r.Store.GetByKey(dependentKey)
@@ -519,7 +574,10 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 	objMeta := MustGetObject(source)
 	namespaceList, replicateTo := objMeta.GetAnnotations()[ReplicateTo]
 	if replicateTo {
-		filters := strings.Split(namespaceList, ",")
+		filters, err := ParseNamespacePatternList(namespaceList)
+		if err != nil {
+			logger.WithError(err).Errorf("invalid %s annotation", ReplicateTo)
+		}
 		list, err := r.Client.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to list namespaces: %v", err)
@@ -549,13 +607,12 @@ func (r *GenericReplicator) ResourceDeletedReplicateTo(source interface{}) {
 	}
 }
 
-func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.NamespaceList, filters []string) {
+// DeleteResources deletes the replicas of source in all namespaces that match one of the given (compiled, strictly
+// anchored) patterns. Only replicas that were created by push replication of source are deleted.
+func (r *GenericReplicator) DeleteResources(source interface{}, list *v1.NamespaceList, filters []*regexp.Regexp) {
 	for _, namespace := range list.Items {
-		for _, ns := range filters {
-			ns = strings.TrimSpace(ns)
-			if matched, _ := regexp.MatchString(ns, namespace.Name); matched {
-				r.DeleteResource(namespace, source)
-			}
+		if MatchesAnyPattern(filters, namespace.Name) {
+			r.DeleteResource(namespace, source)
 		}
 	}
 }
@@ -577,6 +634,10 @@ func (r *GenericReplicator) DeleteResource(namespace v1.Namespace, source interf
 		// Don't work upon itself
 		return
 	}
+	if r.NamespaceFilter.ShouldExclude(namespace.Name) {
+		logger.Debugf("not deleting %s %s/%s: namespace is excluded", r.Kind, namespace.Name, objMeta.GetName())
+		return
+	}
 	targetLocation := fmt.Sprintf("%s/%s", namespace.Name, objMeta.GetName())
 	targetResource, exists, err := r.Store.GetByKey(targetLocation)
 	if err != nil {
@@ -584,6 +645,12 @@ func (r *GenericReplicator) DeleteResource(namespace v1.Namespace, source interf
 		return
 	}
 	if !exists {
+		return
+	}
+	if !IsPushReplicaOf(MustGetObject(targetResource), sourceKey) {
+		// Only delete objects that were created for this source. Anything else (objects that existed before, or
+		// that belong to another source) is left alone.
+		logger.Infof("not deleting %s %s: it was not replicated from %s", r.Kind, targetLocation, sourceKey)
 		return
 	}
 	if err := r.UpdateFuncs.DeleteReplicatedResource(targetResource); err != nil {
@@ -602,6 +669,10 @@ func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
 	}
 
 	for dependentKey := range replicas {
+		if r.isExcludedKey(dependentKey) {
+			logger.Debugf("not patching dependent %s %s: namespace is excluded", r.Kind, dependentKey)
+			continue
+		}
 		target, err := r.ObjectFromStore(dependentKey)
 		if err != nil {
 			logger.WithError(err).Warnf("could not load dependent %s %s: %v", r.Kind, dependentKey, err)
@@ -616,4 +687,11 @@ func (r *GenericReplicator) ResourceDeletedReplicateFrom(source interface{}) {
 			logger.WithError(err).Errorf("Error updating store for %s %s: %v", r.Kind, MustGetKey(s), err)
 		}
 	}
+}
+
+// isExcludedKey returns true if the namespace of the object with the given "<namespace>/<name>" key is excluded from
+// replication.
+func (r *GenericReplicator) isExcludedKey(key string) bool {
+	namespace, _, _ := strings.Cut(key, "/")
+	return r.NamespaceFilter.ShouldExclude(namespace)
 }

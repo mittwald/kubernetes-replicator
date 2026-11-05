@@ -27,7 +27,8 @@ import (
 
 func namespacePrefix() string {
 	//	Mon Jan 2 15:04:05 -0700 MST 2006
-	return "test-repl-" + time.Now().Format("060102150405") + "-"
+	// "role-" keeps the names distinct from the namespaces of the secret tests, which may run at the same time
+	return "test-repl-role-" + time.Now().Format("060102150405") + "-"
 }
 
 type EventHandlerFuncs struct {
@@ -79,7 +80,10 @@ func TestRoleReplicator(t *testing.T) {
 	prefix := namespacePrefix()
 	client := kubernetes.NewForConfigOrDie(config)
 
-	repl := NewReplicator(client, 60*time.Second, false)
+	pushPolicy, err := common.NewPushPolicy([]string{"test-repl-role-[0-9]+-test.*"})
+	require.NoError(t, err)
+
+	repl := NewReplicator(client, 60*time.Second, false, nil, pushPolicy)
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)

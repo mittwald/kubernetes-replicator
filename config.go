@@ -17,4 +17,5 @@ type flags struct {
 	ReplicateServiceAccounts bool
 	SyncByContent            bool
 	ExcludeNamespaces        string
+	PushAllowedSourceNs      string
 }

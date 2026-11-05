@@ -6,11 +6,25 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 namespaceOverride: ""
+# CAUTION: grantClusterAdmin binds the replicator to the cluster-admin ClusterRole. Pushed Roles and RoleBindings can
+# then grant any permission, so only allow trusted namespaces to push (see pushAllowedSourceNamespaces).
 grantClusterAdmin: false
 automountServiceAccountToken: true
+# Regular expressions (each matching a complete namespace name) of namespaces whose objects may be pushed into all
+# other namespaces with the "replicate-to" and "replicate-to-matching" annotations. Anyone who may create Secrets,
+# ConfigMaps, ServiceAccounts, Roles or RoleBindings in such a namespace can write these objects into every
+# namespace with the replicator's permissions, so only list namespaces that are controlled by cluster operators.
+# Objects from other namespaces are only pushed into namespaces that accept them with the
+# "replicator.v1.mittwald.de/allow-push-from" annotation (not supported for Roles and RoleBindings).
+# Example:
+# pushAllowedSourceNamespaces:
+#   - platform
+#   - cert-manager
+pushAllowedSourceNamespaces: []
 # args:
 # - -resync-period=30m
 # - -allow-all=false
+# - -exclude-namespaces=kube-system
 namespacesPrivileges:
   - get
   - watch
