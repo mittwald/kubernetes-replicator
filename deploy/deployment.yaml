@@ -19,12 +19,26 @@ spec:
         app.kubernetes.io/instance: replicator
     spec:
       serviceAccountName: replicator-kubernetes-replicator
-      securityContext: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: kubernetes-replicator
-        securityContext: {}
-        image: quay.io/mittwald/kubernetes-replicator:latest
-        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        # pinned to a released version; update it when upgrading
+        image: quay.io/mittwald/kubernetes-replicator:v2.12.4
+        imagePullPolicy: IfNotPresent
+        # To allow namespaces to push objects into all other namespaces ("replicate-to" / "replicate-to-matching"),
+        # add for example:
+        # - -push-allowed-source-namespaces=platform,cert-manager
         args: []
         ports:
         - name: health

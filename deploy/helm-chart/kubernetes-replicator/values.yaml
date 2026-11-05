@@ -67,16 +67,21 @@ serviceAccount:
   automountServiceAccountToken: true
   # - apiGroups: [""]
   #   resources: ["configmaps"]
-podSecurityContext: {}
+# On OpenShift, set runAsUser and runAsGroup to null to let the security context constraints assign them.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
   # fsGroup: 2000
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
 
 priorityClassName: ""
 
