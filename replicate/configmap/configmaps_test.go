@@ -76,6 +76,21 @@ func TestConfigMapReplicatorSecurity(t *testing.T) {
 		namespace("kube-system", map[string]string{"push-test": "yes"}, nil),
 		namespace("protected", nil, nil),
 		namespace("consenting", map[string]string{"push-test": "yes"}, map[string]string{common.AllowPushFrom: "tenant-a"}),
+		// A source and an up-to-date replica pushed by an earlier version of the replicator, both existing at
+		// startup. The fake lists objects sorted by key, so the source is handled before the replica is cached.
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-startup", Namespace: "trusted", ResourceVersion: "50",
+				Annotations: map[string]string{common.ReplicateTo: "trusted2"}},
+			Data: map[string]string{"foo": "bar"},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-startup", Namespace: "trusted2", ResourceVersion: "51",
+				Annotations: map[string]string{
+					common.ReplicatedFromVersionAnnotation: "50",
+					common.ReplicatedKeysAnnotation:        "foo",
+				}},
+			Data: map[string]string{"foo": "bar"},
+		},
 	)
 
 	filter, err := common.NewNamespaceFilter([]string{"protected"})
@@ -84,6 +99,19 @@ func TestConfigMapReplicatorSecurity(t *testing.T) {
 	require.NoError(t, err)
 
 	repl := NewReplicator(client, 0, false, false, filter, policy)
+
+	// Let the namespace informer sync before the config map informer starts, as it usually does in a cluster. Then
+	// the initial namespace events are handled before any push source is known.
+	require.Eventually(t, func() bool {
+		for _, action := range client.Actions() {
+			if action.GetVerb() == "watch" && action.GetResource().Resource == "namespaces" {
+				return true
+			}
+		}
+		return false
+	}, waitFor, tick)
+	time.Sleep(200 * time.Millisecond)
+
 	go repl.Run()
 	require.Eventually(t, repl.Synced, waitFor, tick)
 	time.Sleep(200 * time.Millisecond) // let the watches start
@@ -250,6 +278,50 @@ func TestConfigMapReplicatorSecurity(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "new", replica.Data["foo"])
 		require.Equal(t, "trusted/legacy", replica.Annotations[common.ReplicatedFromSourceAnnotation])
+	})
+
+	t.Run("up-to-date legacy replicas record their source and are deleted with it", func(t *testing.T) {
+		cmRepl := repl.(*Replicator)
+		create(t, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-current", Namespace: "tenant-b",
+				Annotations: map[string]string{
+					common.ReplicatedFromVersionAnnotation: "4242",
+					common.ReplicatedKeysAnnotation:        "foo",
+				}},
+			Data: map[string]string{"foo": "bar"},
+		})
+		require.Eventually(t, func() bool {
+			_, ok, _ := cmRepl.Store.GetByKey("tenant-b/legacy-current")
+			return ok
+		}, waitFor, tick)
+
+		// a source that has not changed since an earlier version of the replicator pushed it
+		source := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-current", Namespace: "trusted", ResourceVersion: "4242",
+				Annotations: map[string]string{common.ReplicateTo: "tenant-b"}},
+			Data: map[string]string{"foo": "bar"},
+		}
+		require.NoError(t, cmRepl.ReplicateObjectTo(source, namespace("tenant-b", nil, nil)))
+
+		replica, err := get("tenant-b", "legacy-current")
+		require.NoError(t, err)
+		require.Equal(t, "trusted/legacy-current", replica.Annotations[common.ReplicatedFromSourceAnnotation])
+
+		cmRepl.DeleteResource(*namespace("tenant-b", nil, nil), source)
+		requireNotFound(t, "tenant-b", "legacy-current")
+	})
+
+	t.Run("legacy replicas that exist at startup record their source and are deleted with it", func(t *testing.T) {
+		require.Eventually(t, func() bool {
+			cm, err := get("trusted2", "legacy-startup")
+			return err == nil && cm.Annotations[common.ReplicatedFromSourceAnnotation] == "trusted/legacy-startup"
+		}, waitFor, tick)
+
+		require.NoError(t, client.CoreV1().ConfigMaps("trusted").Delete(ctx, "legacy-startup", metav1.DeleteOptions{}))
+		require.Eventually(t, func() bool {
+			_, err := get("trusted2", "legacy-startup")
+			return apierrors.IsNotFound(err)
+		}, waitFor, tick)
 	})
 
 	t.Run("objects pushing into each other do not cause an update loop", func(t *testing.T) {

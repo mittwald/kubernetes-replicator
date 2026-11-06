@@ -182,7 +182,8 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 		targetVersion, ok := targetObject.Annotations[common.ReplicatedFromVersionAnnotation]
 		sourceVersion := source.ResourceVersion
 
-		if ok && targetVersion == sourceVersion {
+		// replicas of earlier versions without a source annotation are updated once to record their source
+		if ok && targetVersion == sourceVersion && common.IsPushReplicaOf(targetObject, common.MustGetKey(source)) {
 			logger.Debugf("Secret %s is already up-to-date", common.MustGetKey(targetObject))
 			return nil
 		}

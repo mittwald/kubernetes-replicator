@@ -153,7 +153,56 @@ func (r *GenericReplicator) Synced() bool {
 
 func (r *GenericReplicator) Run() {
 	log.WithField("kind", r.Kind).Infof("running %s controller", r.Kind)
+	go r.pushAfterSync()
 	r.Controller.Run(wait.NeverStop)
+}
+
+// pushAfterSync replicates all push sources once the object and namespace caches have synced. While the caches are
+// filled at startup, a source can be handled before its existing replicas (or the target namespaces) are cached. Its
+// replicas are then not found, and replicas of earlier versions of the replicator would not record their source (and
+// therefore not be deleted with it) before the next resync.
+func (r *GenericReplicator) pushAfterSync() {
+	if !cache.WaitForCacheSync(wait.NeverStop, r.Synced) {
+		return
+	}
+
+	namespaces := namespacesFromStore()
+	for _, obj := range r.Store.List() {
+		logger := log.WithField("kind", r.Kind).WithField("resource", MustGetKey(obj))
+		annotations := MustGetObject(obj).GetAnnotations()
+
+		if _, ok := annotations[ReplicateFromAnnotation]; ok {
+			// pull targets are never pushed (see ResourceAdded)
+			continue
+		}
+
+		if namespacePatterns, ok := annotations[ReplicateTo]; ok {
+			if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespaces); err != nil {
+				logger.WithError(err).Errorf("could not replicate object to other namespaces")
+			}
+		}
+
+		if namespaceSelectorString, ok := annotations[ReplicateToMatching]; ok {
+			namespaceSelector, err := labels.Parse(namespaceSelectorString)
+			if err != nil {
+				logger.WithError(err).Error("failed to parse label selector")
+				continue
+			}
+			if err := r.replicateResourceToMatchingNamespacesByLabel(context.Background(), obj, namespaceSelector); err != nil {
+				logger.WithError(err).Error("error while replicating by label selector")
+			}
+		}
+	}
+}
+
+// namespacesFromStore returns all namespaces of the namespace cache.
+func namespacesFromStore() []v1.Namespace {
+	namespacesFromStore := namespaceWatcher.NamespaceStore.List()
+	namespaces := make([]v1.Namespace, len(namespacesFromStore))
+	for i, ns := range namespacesFromStore {
+		namespaces[i] = *ns.(*v1.Namespace)
+	}
+	return namespaces
 }
 
 // NamespaceAdded replicates resources with ReplicateTo and ReplicateToMatching
@@ -306,12 +355,7 @@ func (r *GenericReplicator) ResourceAdded(obj interface{}) {
 	if namespacePatterns, ok := annotations[ReplicateTo]; ok {
 		r.ReplicateToList.Store(sourceKey, struct{}{})
 
-		namespacesFromStore := namespaceWatcher.NamespaceStore.List()
-		namespaces := make([]v1.Namespace, len(namespacesFromStore))
-		for i, ns := range namespacesFromStore {
-			namespaces[i] = *ns.(*v1.Namespace)
-		}
-		if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespaces); err != nil {
+		if err := r.replicateResourceToMatchingNamespaces(obj, namespacePatterns, namespacesFromStore()); err != nil {
 			logger.WithError(err).Errorf("could not replicate object to other namespaces")
 		}
 	} else {
