@@ -5,19 +5,31 @@ on:
     branches:
       - master
   pull_request:
+
+permissions:
+  contents: read
+
 jobs:
   verify_helm:
     name: Verify Helm chart
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        helm: ["3.10.3"]
+        include:
+          - helm: "3.10.3"
+            sha256: "950439759ece902157cf915b209b8d694e6f675eaab5099fb7894f30eeaee9a2"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Helm
+        env:
+          HELM_VERSION: ${{ matrix.helm }}
+          HELM_SHA256: ${{ matrix.sha256 }}
         run: |
-          wget https://get.helm.sh/helm-v${{ matrix.helm }}-linux-amd64.tar.gz -O /tmp/helm.tar.gz
+          wget "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -O /tmp/helm.tar.gz
+          echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict
           tar xzf /tmp/helm.tar.gz -C /tmp --strip-components=1
           chmod +x /tmp/helm
 
@@ -31,12 +43,14 @@ jobs:
     name: Compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.24.13"
+          go-version: "1.26.10"
 
       - name: Compile
         run: go build .
@@ -49,15 +63,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.24.13"
+          go-version: "1.26.10"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Set up KIND
+        env:
+          KIND_VERSION: "v0.17.0"
+          KIND_SHA256: "a8c045856db33f839908b6acb90dc8ec397253ffdaef7baf058f5a542e009b9c"
         run: |
-          wget -O ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.17.0/kind-linux-amd64
+          wget -O ./kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  ./kind" | sha256sum --check --strict
           chmod +x ./kind
 
       - name: Start cluster

@@ -10,9 +10,12 @@ secrets and config maps available in multiple namespaces.
 1. [Deployment](#deployment)
     1. [Using Helm](#using-helm)
     1. [Manual](#manual)
+1. [Security model](#security-model)
 1. [Usage](#usage)
     1. ["Role and RoleBinding replication](#role-and-rolebinding-replication)
     1. ["Push-based" replication](#push-based-replication)
+        1. [Allowing push replication](#allowing-push-replication)
+        1. [Existing objects in target namespaces](#existing-objects-in-target-namespaces)
     1. ["Pull-based" replication](#pull-based-replication)
         1. [1. Create the source secret](#step-1-create-the-source-secret)
         1. [2. Create empty secret](#step-2-create-an-empty-destination-secret)
@@ -44,6 +47,31 @@ $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replica
 $ # Create actual deployment
 $ kubectl apply -f https://raw.githubusercontent.com/mittwald/kubernetes-replicator/master/deploy/deployment.yaml
 ```
+
+## Security model
+
+The replicator writes Secrets, ConfigMaps, ServiceAccounts, Roles and RoleBindings with its own, cluster-wide
+permissions. Anybody who can create one of these objects in *some* namespace controls its annotations. To keep
+namespaces isolated from each other, the replicator enforces the following rules:
+
+- **Pull-based replication** (`replicate-from`) only copies from a source that explicitly allows it with the
+  `replication-allowed` and `replication-allowed-namespaces` annotations (unless the replicator runs with
+  `--allow-all`). This applies to all kinds, including ConfigMaps.
+- **Push-based replication** (`replicate-to`, `replicate-to-matching`) is only performed if the source namespace is
+  trusted by the operator (`--push-allowed-source-namespaces`), or if the target namespace accepts objects from the
+  source namespace (`replicator.v1.mittwald.de/allow-push-from` annotation on the Namespace). Roles and RoleBindings
+  can only be pushed from trusted namespaces. See [Allowing push replication](#allowing-push-replication).
+- Push-based replication never overwrites or deletes objects that it did not create for the same source. See
+  [Existing objects in target namespaces](#existing-objects-in-target-namespaces).
+- Namespace lists in annotations are regular expressions that have to match the *whole* namespace name, also when
+  they contain alternations (`team-a|team-b` matches exactly `team-a` and `team-b`). Lists are limited in size and
+  complexity.
+- Namespaces matching `--exclude-namespaces` (comma separated regular expressions, matching any part of the name) are
+  never written to: nothing is pushed into them, pull targets in them are not updated, and nothing is deleted or
+  patched in them. The replicator refuses to start if one of the expressions is invalid.
+
+Granting the replicator cluster-admin (`grantClusterAdmin=true`) increases the impact of pushed Roles and
+RoleBindings considerably; only trust namespaces for push replication that are controlled by cluster operators.
 
 ## Usage
 
@@ -112,6 +140,52 @@ There are two general methods for push-based replication:
 When the labels of a namespace are changed, any resources that were replicated by labels into the namespace and no longer qualify for replication under the new set of labels will be deleted. Afterwards any resources that now match the updated labels will be replicated into the namespace.
 
 It is possible to use both methods of push-based replication together in a single resource, by specifying both annotations.
+
+#### Allowing push replication
+
+Push-based replication writes into other namespaces, so it has to be allowed explicitly. Objects are only pushed into
+a namespace if one of the following applies:
+
+- The source namespace matches one of the regular expressions passed to the replicator with
+  `--push-allowed-source-namespaces` (Helm value `pushAllowedSourceNamespaces`). Objects from such namespaces may be
+  pushed into all namespaces (except excluded ones), so anyone who can create objects in them effectively gets write
+  access to all namespaces. Only list namespaces controlled by cluster operators.
+
+  ```yaml
+  # values.yaml
+  pushAllowedSourceNamespaces:
+    - platform
+    - cert-manager
+  ```
+
+- The target namespace accepts objects from the source namespace with the `replicator.v1.mittwald.de/allow-push-from`
+  annotation, which contains a comma separated list of regular expressions for source namespaces. This does not apply
+  to Roles and RoleBindings, which can only be pushed from namespaces allowed by `--push-allowed-source-namespaces`.
+
+  ```yaml
+  apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: team-a-prod
+    annotations:
+      replicator.v1.mittwald.de/allow-push-from: "team-a-dev"
+  ```
+
+By default, no namespace is allowed to push. **When upgrading from an earlier version, configure one of the options
+above for every namespace that pushes objects**, otherwise the objects are no longer pushed or updated.
+
+#### Existing objects in target namespaces
+
+Objects created by push-based replication carry a `replicator.v1.mittwald.de/replicated-from-source` annotation with
+the `<namespace>/<name>` of their source. The replicator only updates and deletes objects in target namespaces that
+carry this annotation for the same source. Objects that already exist in a target namespace and were not created by
+the replicator for this source are left untouched, as are objects that are pull targets (`replicate-from`) or push
+sources themselves.
+
+Objects that were pushed by an earlier version of the replicator (they carry the
+`replicator.v1.mittwald.de/replicated-from-version` annotation, but no source) are taken over by the first allowed
+source that pushes into them. To let a source take over another existing object, add the
+`replicator.v1.mittwald.de/replicated-from-source: <namespace>/<name>` annotation to it.
 
 ### "Pull-based" replication
 
@@ -234,7 +308,9 @@ ownerReference in the target namespace.
 
 ownerReference won't work [across different namespaces](https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/#owners-and-dependents) and the secret at the destination will be removed by the kubernetes garbage collection.
 
-To keep `ownerReferences` at the destination, set the annotation `replicator.v1.mittwald.de/keep-owner-references=true`
+To keep `ownerReferences` at the destination, set the annotation `replicator.v1.mittwald.de/keep-owner-references=true`.
+Only references to cluster-scoped owners (for example a Namespace) are kept; references to namespaced owners would
+point into the target namespace and cause the garbage collector to delete the copy.
 
 ```yaml
 apiVersion: v1

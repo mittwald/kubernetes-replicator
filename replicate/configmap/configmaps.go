@@ -26,7 +26,7 @@ type Replicator struct {
 }
 
 // NewReplicator creates a new config map replicator
-func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool, namespaceFilter *common.NamespaceFilter) common.Replicator {
+func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allowAll, syncByContent bool, namespaceFilter *common.NamespaceFilter, pushPolicy *common.PushPolicy) common.Replicator {
 	repl := Replicator{
 		GenericReplicator: common.NewGenericReplicator(common.ReplicatorConfig{
 			Kind:          "ConfigMap",
@@ -42,6 +42,7 @@ func NewReplicator(client kubernetes.Interface, resyncPeriod time.Duration, allo
 				return client.CoreV1().ConfigMaps("").Watch(context.TODO(), lo)
 			},
 			NamespaceFilter: namespaceFilter,
+			PushPolicy:      pushPolicy,
 		}),
 	}
 	repl.UpdateFuncs = common.UpdateFuncs{
@@ -59,11 +60,15 @@ func (r *Replicator) ReplicateDataFrom(sourceObj interface{}, targetObj interfac
 	source := sourceObj.(*v1.ConfigMap)
 	target := targetObj.(*v1.ConfigMap)
 
-	// make sure replication is allowed
 	logger := log.
 		WithField("kind", r.Kind).
 		WithField("source", common.MustGetKey(source)).
 		WithField("target", common.MustGetKey(target))
+
+	// make sure replication is allowed
+	if ok, err := r.IsReplicationPermitted(&target.ObjectMeta, &source.ObjectMeta); !ok {
+		return errors.Wrapf(err, "replication of target %s is not permitted", common.MustGetKey(source))
+	}
 
 	targetVersion, ok := target.Annotations[common.ReplicatedFromVersionAnnotation]
 	sourceVersion := source.ResourceVersion
@@ -170,10 +175,15 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	var resourceCopy *v1.ConfigMap
 	if exists {
 		targetObject := targetResource.(*v1.ConfigMap)
+		if err := common.CheckPushTarget(common.MustGetKey(source), targetObject); err != nil {
+			return err
+		}
+
 		targetVersion, ok := targetObject.Annotations[common.ReplicatedFromVersionAnnotation]
 		sourceVersion := source.ResourceVersion
 
-		if ok && targetVersion == sourceVersion {
+		// replicas of earlier versions without a source annotation are updated once to record their source
+		if ok && targetVersion == sourceVersion && common.IsPushReplicaOf(targetObject, common.MustGetKey(source)) {
 			logger.Debugf("Secret %s is already up-to-date", common.MustGetKey(targetObject))
 			return nil
 		}
@@ -185,7 +195,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 
 	keepOwnerReferences, ok := source.Annotations[common.KeepOwnerReferences]
 	if ok && keepOwnerReferences == "true" {
-		resourceCopy.OwnerReferences = source.OwnerReferences
+		resourceCopy.OwnerReferences = r.PushedOwnerReferences(source.OwnerReferences)
 	}
 
 	if resourceCopy.Data == nil {
@@ -240,6 +250,7 @@ func (r *Replicator) ReplicateObjectTo(sourceObj interface{}, target *v1.Namespa
 	resourceCopy.Annotations[common.ReplicatedAtAnnotation] = time.Now().Format(time.RFC3339)
 	resourceCopy.Annotations[common.ReplicatedFromVersionAnnotation] = source.ResourceVersion
 	resourceCopy.Annotations[common.ReplicatedKeysAnnotation] = strings.Join(replicatedKeys, ",")
+	resourceCopy.Annotations[common.ReplicatedFromSourceAnnotation] = common.MustGetKey(source)
 
 	var obj interface{}
 	if exists {
@@ -310,11 +321,11 @@ func (r *Replicator) DeleteReplicatedResource(targetResource interface{}) error 
 
 	if strings.Join(resourceKeys, ",") == object.Annotations[common.ReplicatedKeysAnnotation] {
 		logger.Debugf("Deleting %s", targetLocation)
-		if err := r.Client.CoreV1().ConfigMaps(object.Namespace).Delete(context.TODO(), object.Name, metav1.DeleteOptions{}); err != nil {
+		if err := r.Client.CoreV1().ConfigMaps(object.Namespace).Delete(context.TODO(), object.Name, common.ReplicaDeleteOptions(object)); err != nil {
 			return errors.Wrapf(err, "Failed deleting %s: %v", targetLocation, err)
 		}
 	} else {
-		var patch []common.JSONPatchOperation
+		patch := common.ReplicaPatchPreconditions(object)
 		exists := make(map[string]struct{})
 		for _, value := range resourceKeys {
 			exists[value] = struct{}{}

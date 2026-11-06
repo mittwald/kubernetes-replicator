@@ -27,6 +27,8 @@ type NamespaceWatcher struct {
 	NamespaceStore      cache.Store
 	NamespaceController cache.Controller
 
+	// funcsLock protects AddFuncs and UpdateFuncs: functions are registered while the controller is already running.
+	funcsLock   sync.RWMutex
 	AddFuncs    []AddFunc
 	UpdateFuncs []UpdateFunc
 }
@@ -36,7 +38,10 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 	nw.doOnce.Do(func() {
 		namespaceAdded := func(obj interface{}) {
 			namespace := obj.(*v1.Namespace)
-			for _, addFunc := range nw.AddFuncs {
+			nw.funcsLock.RLock()
+			addFuncs := nw.AddFuncs
+			nw.funcsLock.RUnlock()
+			for _, addFunc := range addFuncs {
 				go addFunc(namespace)
 			}
 		}
@@ -44,7 +49,10 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 		namespaceUpdated := func(old interface{}, new interface{}) {
 			nsOld := old.(*v1.Namespace)
 			nsNew := new.(*v1.Namespace)
-			for _, updateFunc := range nw.UpdateFuncs {
+			nw.funcsLock.RLock()
+			updateFuncs := nw.UpdateFuncs
+			nw.funcsLock.RUnlock()
+			for _, updateFunc := range updateFuncs {
 				go updateFunc(nsOld, nsNew)
 			}
 		}
@@ -75,11 +83,15 @@ func (nw *NamespaceWatcher) create(client kubernetes.Interface, resyncPeriod tim
 // OnNamespaceAdded will add another method to a list of functions to be called when a new namespace is created
 func (nw *NamespaceWatcher) OnNamespaceAdded(client kubernetes.Interface, resyncPeriod time.Duration, addFunc AddFunc) {
 	nw.create(client, resyncPeriod)
+	nw.funcsLock.Lock()
+	defer nw.funcsLock.Unlock()
 	nw.AddFuncs = append(nw.AddFuncs, addFunc)
 }
 
 // OnNamespaceUpdated will add another method to a list of functions to be called when a namespace is updated
 func (nw *NamespaceWatcher) OnNamespaceUpdated(client kubernetes.Interface, resyncPeriod time.Duration, updateFunc UpdateFunc) {
 	nw.create(client, resyncPeriod)
+	nw.funcsLock.Lock()
+	defer nw.funcsLock.Unlock()
 	nw.UpdateFuncs = append(nw.UpdateFuncs, updateFunc)
 }

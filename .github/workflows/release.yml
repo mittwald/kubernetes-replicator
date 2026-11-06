@@ -5,22 +5,32 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build and release image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
-      - run: docker login -u "${{ secrets.QUAY_IO_USER }}" -p "${{ secrets.QUAY_IO_TOKEN }}" quay.io
+      - name: Log in to quay.io
+        env:
+          QUAY_IO_USER: ${{ secrets.QUAY_IO_USER }}
+          QUAY_IO_TOKEN: ${{ secrets.QUAY_IO_TOKEN }}
+        run: printf '%s' "${QUAY_IO_TOKEN}" | docker login -u "${QUAY_IO_USER}" --password-stdin quay.io
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.24.13"
+          go-version: "1.26.10"
+          cache: false
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+        uses: goreleaser/goreleaser-action@b953231f81b8dfd023c58e0854a721e35037f28b # v2.9.1
         with:
           version: "0.181.1"
           args: release --rm-dist
@@ -31,10 +41,12 @@ jobs:
     name: Bump app version in Helm chart
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Bump chart version
-        uses: mittwald/bump-app-version-action@v1
+        uses: mittwald/bump-app-version-action@00f3d858e9a3092711e3d26ffb4c1d851096afb7 # v1
         with:
           mode: 'publish'
           chartYaml: './deploy/helm-chart/kubernetes-replicator/Chart.yaml'

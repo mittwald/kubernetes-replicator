@@ -61,6 +61,13 @@ func (pf *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// testPushPolicy allows the namespaces created by the tests ("<prefix>test...") to push into other namespaces.
+func testPushPolicy(t *testing.T) *common.PushPolicy {
+	policy, err := common.NewPushPolicy([]string{"test-repl-[0-9]+-test.*"})
+	require.NoError(t, err)
+	return policy
+}
+
 func setupRealClientSet(t *testing.T) *kubernetes.Clientset {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	//is KUBECONFIG is not specified try to use the local KUBECONFIG or the in cluster config
@@ -82,9 +89,10 @@ func TestSecretReplicator(t *testing.T) {
 	log.SetFormatter(&PlainFormatter{})
 
 	client := setupRealClientSet(t)
-	filter := common.NewNamespaceFilter([]string{})
+	filter, err := common.NewNamespaceFilter([]string{})
+	require.NoError(t, err)
 
-	repl := NewReplicator(client, 60*time.Second, false, false, filter)
+	repl := NewReplicator(client, 60*time.Second, false, false, filter, testPushPolicy(t))
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
@@ -827,6 +835,10 @@ func TestSecretReplicator(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "source-repl-updates-existing",
 				Namespace: ns2.Name,
+				Annotations: map[string]string{
+					// existing objects are only taken over if they are attributed to the source
+					common.ReplicatedFromSourceAnnotation: ns.Name + "/source-repl-updates-existing",
+				},
 			},
 			Type: corev1.SecretTypeOpaque,
 			Data: map[string][]byte{},
@@ -1375,6 +1387,132 @@ func TestSecretReplicator(t *testing.T) {
 
 	})
 
+	t.Run("push replication does not overwrite or delete secrets it did not create", func(t *testing.T) {
+		secrets2 := client.CoreV1().Secrets(ns2.Name)
+
+		victim := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "push-victim",
+				Namespace: ns2.Name,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"foo": []byte("original")},
+		}
+		_, err := secrets2.Create(context.TODO(), &victim, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "push-victim",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo: ns2.Name,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"foo": []byte("attacker")},
+		}
+		_, err = secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
+
+		updVictim, err := secrets2.Get(context.TODO(), victim.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("original"), updVictim.Data["foo"])
+		require.NotContains(t, updVictim.Annotations, common.ReplicatedFromSourceAnnotation)
+
+		err = secrets.Delete(context.TODO(), source.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
+
+		updVictim, err = secrets2.Get(context.TODO(), victim.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("original"), updVictim.Data["foo"])
+	})
+
+	t.Run("deleting a source does not delete secrets in namespaces only matched by an unanchored pattern", func(t *testing.T) {
+		secrets2 := client.CoreV1().Secrets(ns2.Name)
+
+		victim := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "unanchored-victim",
+				Namespace: ns2.Name,
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		_, err := secrets2.Create(context.TODO(), &victim, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		// "<prefix>test" is a substring of "<prefix>test2", but does not match it as a whole
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "unanchored-victim",
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo: ns.Name,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		_, err = secrets.Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		time.Sleep(500 * time.Millisecond)
+
+		err = secrets.Delete(context.TODO(), source.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
+
+		_, err = secrets2.Get(context.TODO(), victim.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+	})
+
+	t.Run("push replication from a namespace that is not allowed requires consent of the target namespace", func(t *testing.T) {
+		untrustedNs := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "untrusted"}}
+		consentingNs := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+			Name:        prefix + "test-consenting",
+			Annotations: map[string]string{common.AllowPushFrom: untrustedNs.Name},
+		}}
+
+		for _, n := range []corev1.Namespace{untrustedNs, consentingNs} {
+			_, err := client.CoreV1().Namespaces().Create(context.TODO(), &n, metav1.CreateOptions{})
+			require.NoError(t, err)
+		}
+		defer func() {
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), untrustedNs.Name, metav1.DeleteOptions{})
+			_ = client.CoreV1().Namespaces().Delete(context.TODO(), consentingNs.Name, metav1.DeleteOptions{})
+		}()
+
+		time.Sleep(500 * time.Millisecond)
+
+		source := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "untrusted-push",
+				Namespace: untrustedNs.Name,
+				Annotations: map[string]string{
+					common.ReplicateTo: ns2.Name + "," + consentingNs.Name,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"foo": []byte("Hello Foo")},
+		}
+		_, err := client.CoreV1().Secrets(untrustedNs.Name).Create(context.TODO(), &source, metav1.CreateOptions{})
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
+
+		_, err = client.CoreV1().Secrets(ns2.Name).Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.Condition(t, func() bool { return errors.IsNotFound(err) }, "Expected not found, but got: %+v", err)
+
+		replica, err := client.CoreV1().Secrets(consentingNs.Name).Get(context.TODO(), source.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Equal(t, []byte("Hello Foo"), replica.Data["foo"])
+		require.Equal(t, common.MustGetKey(&source), replica.Annotations[common.ReplicatedFromSourceAnnotation])
+	})
+
 }
 
 func TestSecretReplicatorSyncByContent(t *testing.T) {
@@ -1386,15 +1524,16 @@ func TestSecretReplicatorSyncByContent(t *testing.T) {
 	client := setupRealClientSet(t)
 	ctx := context.TODO()
 
-	filter := common.NewNamespaceFilter([]string{})
+	filter, err := common.NewNamespaceFilter([]string{})
+	require.NoError(t, err)
 
-	repl := NewReplicator(client, 60*time.Second, false, true, filter)
+	repl := NewReplicator(client, 60*time.Second, false, true, filter, testPushPolicy(t))
 	go repl.Run()
 
 	time.Sleep(200 * time.Millisecond)
 
 	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: prefix + "test"}}
-	_, err := client.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
+	_, err = client.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	defer func() {

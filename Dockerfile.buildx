@@ -1,17 +1,22 @@
-FROM --platform=$BUILDPLATFORM golang:1.24.13 AS deps
+FROM --platform=$BUILDPLATFORM golang:1.26.10 AS build
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY . /src
 WORKDIR /src
-RUN go get -v ./...
+RUN go mod download
 RUN go vet -v ./...
-RUN CGO_ENABLED=0 GO111MODULE=on go build
+RUN CGO_ENABLED=0 GO111MODULE=on GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /kubernetes-replicator .
 
 FROM --platform=$TARGETPLATFORM scratch
 ARG TARGETPLATFORM
 LABEL MAINTAINER="Martin Helmich <m.helmich@mittwald.de>"
 
-COPY --from=build /src/ /kubernetes-replicator
+COPY --from=build /kubernetes-replicator /kubernetes-replicator
+
+# run as an unprivileged user (the binary is static and does not need a passwd entry)
+USER 65532:65532
 
 CMD ["/kubernetes-replicator"]
