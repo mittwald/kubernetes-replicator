@@ -40,6 +40,8 @@ dockers:
     use: buildx
     build_flag_templates:
       - --platform=linux/amd64
+      - --provenance=false
+      - --sbom=false
   -
     dockerfile: Dockerfile
     image_templates:
@@ -56,6 +58,8 @@ dockers:
     use: buildx
     build_flag_templates:
       - --platform=linux/arm64
+      - --provenance=false
+      - --sbom=false
   -
     dockerfile: Dockerfile
     image_templates:
@@ -72,6 +76,8 @@ dockers:
     use: buildx
     build_flag_templates:
       - --platform=linux/arm/v5
+      - --provenance=false
+      - --sbom=false
   -
     dockerfile: Dockerfile
     image_templates:
@@ -88,6 +94,8 @@ dockers:
     use: buildx
     build_flag_templates:
       - --platform=linux/arm/v6
+      - --provenance=false
+      - --sbom=false
   -
     dockerfile: Dockerfile
     image_templates:
@@ -104,6 +112,8 @@ dockers:
     use: buildx
     build_flag_templates:
       - --platform=linux/arm/v7
+      - --provenance=false
+      - --sbom=false
 docker_manifests:
   - 
     name_template: quay.io/mittwald/kubernetes-replicator:latest
